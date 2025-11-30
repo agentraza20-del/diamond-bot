@@ -48,11 +48,31 @@ client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
     currentQRCode = qr; // Store QR code
     
-    // Save QR code to file
+    // Save QR code to file with proper path
     const fs = require('fs');
-    fs.writeFileSync('/root/diamond-bot/qr-code.txt', qr, 'utf8');
-    console.log('✅ QR code saved to qr-code.txt');
-    console.log('\n\n');
+    const os = require('os');
+    const platform = os.platform();
+    
+    let qrPath;
+    if (platform === 'win32') {
+        qrPath = path.join(__dirname, 'qr-code.txt');
+    } else {
+        qrPath = '/root/diamond-bot/qr-code.txt';
+    }
+    
+    try {
+        fs.writeFileSync(qrPath, qr, 'utf8');
+        console.log(`✅ QR code saved to ${qrPath}`);
+    } catch (err) {
+        console.log(`❌ Error saving QR code: ${err.message}`);
+    }
+    
+    console.log('\n');
+    console.log('════════════════════════════════════════');
+    console.log('QR CODE STRING (for manual entry):');
+    console.log('════════════════════════════════════════');
+    console.log(qr);
+    console.log('════════════════════════════════════════\n');
 });
 
 // Client authenticated (when QR is scanned successfully)

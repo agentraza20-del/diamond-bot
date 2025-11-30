@@ -55,11 +55,19 @@ client.on('qr', (qr) => {
     console.log('\n\n');
 });
 
+// Client authenticated (when QR is scanned successfully)
+client.on('authenticated', () => {
+    console.log('\n✅✅✅ WhatsApp Successfully Authenticated! ✅✅✅');
+    console.log('📱 QR Code Scan Successful!');
+    console.log('🔐 Session saved and ready to use.\n');
+});
+
 // Client ready
 client.on('ready', () => {
     botIsReady = true; // Set flag when ready
     currentQRCode = null; // Clear QR code when connected
-    console.log('✅ WhatsApp Bot Ready!');
+    console.log('\n✅ WhatsApp Bot Ready!');
+    console.log('✅ Session Loaded Successfully!');
     console.log('🤖 Bot is now listening for messages...\n');
     
     // Start periodic check for deleted messages (every 15 seconds)

@@ -50,10 +50,40 @@ client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
     currentQRCode = qr; // Store QR code
     
-    // Save QR code to file
+    // Save QR code string to file
     const fs = require('fs');
     fs.writeFileSync('/root/diamond-bot/qr-code.txt', qr, 'utf8');
-    console.log('✅ QR code saved to qr-code.txt');
+    
+    // Also save visual QR code to HTML file for web display
+    const qrcodeLib = require('qrcode');
+    qrcodeLib.toDataURL(qr).then(url => {
+        const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Diamond Bot - QR Code</title>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f0f0; font-family: Arial; }
+        .container { text-align: center; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        img { max-width: 500px; margin: 20px 0; border: 2px solid #007bff; padding: 10px; }
+        p { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Diamond Bot - WhatsApp QR Code</h1>
+        <p>Scan this QR code with WhatsApp to connect</p>
+        <img src="${url}" alt="QR Code">
+        <p>Settings → Linked Devices → Link a device</p>
+    </div>
+</body>
+</html>`;
+        fs.writeFileSync('/root/diamond-bot/public/qr-code.html', htmlContent, 'utf8');
+        console.log('✅ QR code saved (txt + HTML)');
+    }).catch(err => {
+        console.log('⚠️ Could not generate HTML QR code');
+    });
+    
     console.log('\n\n');
 });
 

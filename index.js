@@ -41,45 +41,32 @@ const client = new Client({
 
 let botIsReady = false; // Flag to track bot ready state
 let currentQRCode = null; // Store current QR code
+let qrScanned = false; // Track if QR was scanned
 
 // QR code generation
 client.on('qr', (qr) => {
+    qrScanned = false; // Reset scan flag when new QR is generated
     console.log('\n\n📱 SCAN THIS QR CODE WITH WHATSAPP:\n');
     qrcode.generate(qr, { small: true });
     currentQRCode = qr; // Store QR code
     
-    // Save QR code to file with proper path
+    // Save QR code to file
     const fs = require('fs');
-    const os = require('os');
-    const platform = os.platform();
-    
-    let qrPath;
-    if (platform === 'win32') {
-        qrPath = path.join(__dirname, 'qr-code.txt');
-    } else {
-        qrPath = '/root/diamond-bot/qr-code.txt';
-    }
-    
-    try {
-        fs.writeFileSync(qrPath, qr, 'utf8');
-        console.log(`✅ QR code saved to ${qrPath}`);
-    } catch (err) {
-        console.log(`❌ Error saving QR code: ${err.message}`);
-    }
-    
-    console.log('\n');
-    console.log('════════════════════════════════════════');
-    console.log('QR CODE STRING (for manual entry):');
-    console.log('════════════════════════════════════════');
-    console.log(qr);
-    console.log('════════════════════════════════════════\n');
+    fs.writeFileSync('/root/diamond-bot/qr-code.txt', qr, 'utf8');
+    console.log('✅ QR code saved to qr-code.txt');
+    console.log('\n\n');
 });
 
 // Client authenticated (when QR is scanned successfully)
-client.on('authenticated', () => {
-    console.log('\n✅✅✅ WhatsApp Successfully Authenticated! ✅✅✅');
+client.on('authenticated', (session) => {
+    qrScanned = true;
+    console.log('\n');
+    console.log('████████████████████████████████████████████████████');
+    console.log('✅✅✅ WhatsApp Successfully Authenticated! ✅✅✅');
     console.log('📱 QR Code Scan Successful!');
-    console.log('🔐 Session saved and ready to use.\n');
+    console.log('🔐 Session saved and ready to use.');
+    console.log('████████████████████████████████████████████████████');
+    console.log('\n');
 });
 
 // Client ready

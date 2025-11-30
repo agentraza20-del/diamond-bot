@@ -177,9 +177,62 @@ client.on('message', async (msg) => {
             }
         }
         
-        // Payment Number Command - Load keywords dynamically from config
+        // "Number" command - Show all payment numbers
         const messageBody = msg.body.trim().toLowerCase();
         
+        if (messageBody === 'number' || messageBody === 'নাম্বার' || messageBody === 'num') {
+            try {
+                const paymentNumberPath = path.join(__dirname, 'config', 'payment-number.json');
+                const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
+                const paymentConfig = JSON.parse(paymentNumberData);
+                
+                if (!paymentConfig.paymentNumbers || paymentConfig.paymentNumbers.length === 0) {
+                    await msg.reply('❌ পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                    return;
+                }
+                
+                let responseText = '💰 *Payment Numbers* 💰\n\n';
+                
+                // Group by method
+                const methodGroups = {};
+                paymentConfig.paymentNumbers.forEach(payment => {
+                    if (!methodGroups[payment.method]) {
+                        methodGroups[payment.method] = [];
+                    }
+                    methodGroups[payment.method].push(payment);
+                });
+                
+                // Format each method group
+                Object.keys(methodGroups).forEach((method, index) => {
+                    const payments = methodGroups[method];
+                    
+                    payments.forEach(payment => {
+                        if (payment.isBank) {
+                            responseText += `🏦 *${payment.method}*\n`;
+                            responseText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
+                            responseText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
+                            responseText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
+                            responseText += `📋 ধরন: ${payment.type}\n\n`;
+                        } else {
+                            responseText += `📱 *${payment.method}* (${payment.type})\n`;
+                            responseText += `📞 ${payment.number}\n\n`;
+                        }
+                    });
+                });
+                
+                responseText += '✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
+                
+                await msg.reply(responseText);
+                console.log(`[NUMBER-COMMAND] Sent all payment numbers to ${fromUserId}`);
+                return;
+            } catch (error) {
+                console.error('[NUMBER-COMMAND ERROR]', error);
+                await msg.reply('❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                return;
+            }
+        }
+        
+        // Payment Number Command - Load keywords dynamically from config
         try {
             const paymentKeywordsPath = path.join(__dirname, 'config', 'payment-keywords.json');
             const paymentKeywordsData = await fs.readFile(paymentKeywordsPath, 'utf8');

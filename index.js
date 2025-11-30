@@ -41,70 +41,25 @@ const client = new Client({
 
 let botIsReady = false; // Flag to track bot ready state
 let currentQRCode = null; // Store current QR code
-let qrScanned = false; // Track if QR was scanned
 
 // QR code generation
 client.on('qr', (qr) => {
-    qrScanned = false; // Reset scan flag when new QR is generated
     console.log('\n\n📱 SCAN THIS QR CODE WITH WHATSAPP:\n');
     qrcode.generate(qr, { small: true });
     currentQRCode = qr; // Store QR code
     
-    // Save QR code string to file
+    // Save QR code to file
     const fs = require('fs');
     fs.writeFileSync('/root/diamond-bot/qr-code.txt', qr, 'utf8');
-    
-    // Also save visual QR code to HTML file for web display
-    const qrcodeLib = require('qrcode');
-    qrcodeLib.toDataURL(qr).then(url => {
-        const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-    <title>Diamond Bot - QR Code</title>
-    <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f0f0; font-family: Arial; }
-        .container { text-align: center; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        img { max-width: 500px; margin: 20px 0; border: 2px solid #007bff; padding: 10px; }
-        p { color: #666; font-size: 14px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🤖 Diamond Bot - WhatsApp QR Code</h1>
-        <p>Scan this QR code with WhatsApp to connect</p>
-        <img src="${url}" alt="QR Code">
-        <p>Settings → Linked Devices → Link a device</p>
-    </div>
-</body>
-</html>`;
-        fs.writeFileSync('/root/diamond-bot/public/qr-code.html', htmlContent, 'utf8');
-        console.log('✅ QR code saved (txt + HTML)');
-    }).catch(err => {
-        console.log('⚠️ Could not generate HTML QR code');
-    });
-    
+    console.log('✅ QR code saved to qr-code.txt');
     console.log('\n\n');
-});
-
-// Client authenticated (when QR is scanned successfully)
-client.on('authenticated', (session) => {
-    qrScanned = true;
-    console.log('\n');
-    console.log('████████████████████████████████████████████████████');
-    console.log('✅✅✅ WhatsApp Successfully Authenticated! ✅✅✅');
-    console.log('📱 QR Code Scan Successful!');
-    console.log('🔐 Session saved and ready to use.');
-    console.log('████████████████████████████████████████████████████');
-    console.log('\n');
 });
 
 // Client ready
 client.on('ready', () => {
     botIsReady = true; // Set flag when ready
     currentQRCode = null; // Clear QR code when connected
-    console.log('\n✅ WhatsApp Bot Ready!');
-    console.log('✅ Session Loaded Successfully!');
+    console.log('✅ WhatsApp Bot Ready!');
     console.log('🤖 Bot is now listening for messages...\n');
     
     // Start periodic check for deleted messages (every 15 seconds)
@@ -1035,8 +990,17 @@ async function getGroupName(client, groupId) {
     }
 }
 
-// Initialize client
-client.initialize();
+// Initialize client with error handling
+try {
+    client.initialize().catch(err => {
+        console.error('❌ Failed to initialize WhatsApp client:', err.message);
+        process.exit(1);
+    });
+    console.log('✅ Client initialization started...');
+} catch (err) {
+    console.error('❌ Error during client initialization:', err.message);
+    process.exit(1);
+}
 
 console.log('🚀 Starting bot initialization...');
 
@@ -1193,10 +1157,39 @@ app.get('/api/bot-profile-photo/:userId', async (req, res) => {
 });
 
 const BOT_API_PORT = process.env.BOT_API_PORT || 3003;
-app.listen(BOT_API_PORT, () => {
+
+// Create server with graceful shutdown
+const server = app.listen(BOT_API_PORT, () => {
     console.log(`\n✅ 🔌 Bot API Server running on http://localhost:${BOT_API_PORT}`);
     console.log(`📨 Message endpoint: POST http://localhost:${BOT_API_PORT}/api/bot-send-message`);
     console.log(`🔍 Status endpoint: GET http://localhost:${BOT_API_PORT}/api/bot-status\n`);
+});
+
+// Allow port reuse and graceful shutdown
+server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${BOT_API_PORT} is already in use. Retrying in 3 seconds...`);
+        setTimeout(() => {
+            server.close();
+            server.listen(BOT_API_PORT);
+        }, 3000);
+    }
+});
+
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully...');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
 });
 
 console.log('🚀 WhatsApp Bot Starting...');

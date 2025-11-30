@@ -396,8 +396,26 @@ client.on('message', async (msg) => {
             return;
         }
         
+        // Check system status before processing diamond requests
+        const diamondStatusPath = path.join(__dirname, 'config', 'diamond-status.json');
+        let diamondSystemStatus = null;
+        try {
+            const statusData = await fs.readFile(diamondStatusPath, 'utf8');
+            diamondSystemStatus = JSON.parse(statusData);
+        } catch (err) {
+            console.log('[SYSTEM-STATUS] Could not load diamond status, assuming ON');
+        }
+        
         // Check for multi-line diamond request (ID + Diamonds)
         if (isGroup && msg.body.includes('\n')) {
+            // Check if system is OFF
+            if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
+                const offMessage = diamondSystemStatus.globalMessage || '❌ ডায়মন্ড সিস্টেম বর্তমানে বন্ধ আছে।';
+                await msg.reply(offMessage);
+                console.log(`[SYSTEM-OFF] Rejected multi-line request - System is OFF`);
+                return;
+            }
+            
             console.log(`\n[MULTI-LINE] 🟢 DETECTED MULTI-LINE MESSAGE`);
             console.log(`[MULTI-LINE] From: ${fromUserId}`);
             console.log(`[MULTI-LINE] Group: ${groupId}`);
@@ -431,6 +449,14 @@ client.on('message', async (msg) => {
         // Diamond order submission: just a number (e.g., 100)
         const diamondMatch = msg.body.trim().match(/^(\d+)$/);
         if (diamondMatch) {
+            // Check if system is OFF
+            if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
+                const offMessage = diamondSystemStatus.globalMessage || '❌ ডায়মন্ড সিস্টেম বর্তমানে বন্ধ আছে।';
+                await msg.reply(offMessage);
+                console.log(`[SYSTEM-OFF] Rejected diamond request - System is OFF`);
+                return;
+            }
+            
             const amount = parseInt(diamondMatch[1]);
             let userName = fromUserId;
             try {

@@ -222,12 +222,27 @@ client.on('message', async (msg) => {
                 
                 responseText += '✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
                 
-                await msg.reply(responseText);
-                console.log(`[NUMBER-COMMAND] Sent all payment numbers to ${fromUserId}`);
+                try {
+                    await msg.reply(responseText);
+                    console.log(`[NUMBER-COMMAND] ✅ Sent all payment numbers to ${fromUserId}`);
+                } catch (replyError) {
+                    console.error('[NUMBER-COMMAND] ❌ Reply failed:', replyError.message);
+                    // Try direct send instead
+                    try {
+                        await client.sendMessage(msg.from, responseText);
+                        console.log(`[NUMBER-COMMAND] ✅ Sent via direct sendMessage`);
+                    } catch (sendError) {
+                        console.error('[NUMBER-COMMAND] ❌ SendMessage also failed:', sendError.message);
+                    }
+                }
                 return;
             } catch (error) {
-                console.error('[NUMBER-COMMAND ERROR]', error);
-                await msg.reply('❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                console.error('[NUMBER-COMMAND ERROR]', error.message, error.stack);
+                try {
+                    await msg.reply('❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                } catch (e) {
+                    console.error('[NUMBER-COMMAND] Failed to send error message:', e.message);
+                }
                 return;
             }
         }

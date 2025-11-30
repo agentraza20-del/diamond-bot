@@ -35,7 +35,34 @@ db.initializeCleanup();
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--disable-dev-shm-usage',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-sync',
+            '--disable-translate',
+            '--disable-default-apps',
+            '--enable-automation',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-breakpad',
+            '--disable-client-side-phishing-detection',
+            '--disable-hang-monitor',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-ipc-flooding-protection',
+            '--disable-renderer-backgrounding',
+            '--no-first-run',
+            '--use-mock-keychain',
+            '--metrics-recording-only',
+            '--mute-audio'
+        ]
     }
 });
 
@@ -992,14 +1019,22 @@ async function getGroupName(client, groupId) {
 
 // Initialize client with error handling
 try {
+    console.log('✅ Client initialization started...');
     client.initialize().catch(err => {
         console.error('❌ Failed to initialize WhatsApp client:', err.message);
-        process.exit(1);
+        console.error('Error details:', err);
+        // Restart process after 5 seconds
+        setTimeout(() => {
+            console.log('Restarting bot...');
+            process.exit(0); // Systemd will restart
+        }, 5000);
     });
-    console.log('✅ Client initialization started...');
 } catch (err) {
     console.error('❌ Error during client initialization:', err.message);
-    process.exit(1);
+    console.error('Error details:', err);
+    setTimeout(() => {
+        process.exit(1);
+    }, 5000);
 }
 
 console.log('🚀 Starting bot initialization...');

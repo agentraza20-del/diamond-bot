@@ -1,17 +1,5 @@
 [
   {
-    "phone": "8801721016186",
-    "whatsappId": "76210050711676@c.us",
-    "blockedAt": "2025-12-01T08:00:00.000Z",
-    "reason": "Admin deleted"
-  },
-  {
-    "phone": "8801611938365",
-    "whatsappId": "8801611938365@c.us",
-    "blockedAt": "2025-12-01T08:00:00.000Z",
-    "reason": "Admin deleted"
-  },
-  {
     "phone": "100378335014967",
     "whatsappId": "100378335014967@lid",
     "blockedAt": "2025-12-01T08:00:00.000Z",
@@ -20,12 +8,6 @@
   {
     "phone": "8801999777666",
     "whatsappId": "8801999777666@lid",
-    "blockedAt": "2025-12-01T08:00:00.000Z",
-    "reason": "Admin deleted"
-  },
-  {
-    "phone": "8801725001423",
-    "whatsappId": "8801725001423@lid",
     "blockedAt": "2025-12-01T08:00:00.000Z",
     "reason": "Admin deleted"
   },

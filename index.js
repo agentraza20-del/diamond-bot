@@ -13,6 +13,15 @@ const { processPaymentReceipt } = require('./utils/payment-processor');
 const { handleDiamondRequest, handleMultiLineDiamondRequest, approvePendingDiamond, findPendingDiamondByUser, showPendingRequests, cancelDiamondRequest, pendingDiamondRequests } = require('./handlers/diamond-request');
 const { handleDepositRequest, handleDepositApproval, handleBalanceQuery, showPendingDeposits, showDepositStats } = require('./handlers/deposit');
 
+// 🛡️ WhatsApp Safety - Message delay helper to prevent ban
+const { delay, replyWithDelay, sendMessageWithDelay, messageCounter } = require('./utils/delay-helper');
+
+// 🔍 Admin Matcher - Handle different WhatsApp ID formats
+const { isAdminByAnyVariant, getAdminInfo } = require('./utils/admin-matcher');
+
+// 🤖 Auto Admin Registration
+const { autoRegisterAdmin, checkAndAutoRegisterAdmin } = require('./utils/auto-admin-register');
+
 // Connect to Admin Panel Socket.IO server
 const adminSocket = io('http://localhost:3000');
 
@@ -113,6 +122,12 @@ client.on('disconnected', (reason) => {
 // Main message handler
 client.on('message', async (msg) => {
     try {
+        // 🛡️ Rate limiting - Check message limits (100/hour, 500/day)
+        if (!messageCounter.canSendMessage()) {
+            console.log('[RATE-LIMIT] ⚠️ Message limit reached, skipping response...');
+            return;
+        }
+
         console.log(`[HANDLER] Message received!`);
         const fromUserId = msg.author || msg.from;
         
@@ -172,7 +187,8 @@ client.on('message', async (msg) => {
                         console.error('[PAYMENT SCREENSHOT] Failed to notify admin:', notifyErr.message);
                     }
                     
-                    await msg.reply('✅ Payment screenshot received!\n\n⏳ Admin will verify your payment soon.\n\nThank you for your patience! 😊');
+                    await replyWithDelay(msg, '✅ Payment screenshot received!\n\n⏳ Admin will verify your payment soon.\n\nThank you for your patience! 😊');
+                    messageCounter.incrementCounter();
                 }
             }
         }
@@ -223,13 +239,15 @@ client.on('message', async (msg) => {
                 responseText += '✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
                 
                 try {
-                    await msg.reply(responseText);
+                    await replyWithDelay(msg, responseText);
+                    messageCounter.incrementCounter();
                     console.log(`[NUMBER-COMMAND] ✅ Sent all payment numbers to ${fromUserId}`);
                 } catch (replyError) {
                     console.error('[NUMBER-COMMAND] ❌ Reply failed:', replyError.message);
                     // Try direct send instead
                     try {
-                        await client.sendMessage(msg.from, responseText);
+                        await sendMessageWithDelay(client, msg.from, responseText);
+                        messageCounter.incrementCounter();
                         console.log(`[NUMBER-COMMAND] ✅ Sent via direct sendMessage`);
                     } catch (sendError) {
                         console.error('[NUMBER-COMMAND] ❌ SendMessage also failed:', sendError.message);
@@ -239,7 +257,8 @@ client.on('message', async (msg) => {
             } catch (error) {
                 console.error('[NUMBER-COMMAND ERROR]', error.message, error.stack);
                 try {
-                    await msg.reply('❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                    await replyWithDelay(msg, '❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                    messageCounter.incrementCounter();
                 } catch (e) {
                     console.error('[NUMBER-COMMAND] Failed to send error message:', e.message);
                 }
@@ -283,7 +302,8 @@ client.on('message', async (msg) => {
                     );
                     
                     if (matchedNumbers.length === 0) {
-                        await msg.reply(`❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
+                        await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
+                        messageCounter.incrementCounter();
                         return;
                     }
                     
@@ -319,11 +339,13 @@ client.on('message', async (msg) => {
                     // Add footer with instructions
                     responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
                     
-                    await msg.reply(responseMessage);
+                    await replyWithDelay(msg, responseMessage);
+                    messageCounter.incrementCounter();
                     console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
                 } catch (error) {
                     console.error('[PAYMENT-INFO ERROR]', error);
-                    await msg.reply('❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                    await replyWithDelay(msg, '❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
+                    messageCounter.incrementCounter();
                 }
                 return;
             }
@@ -346,7 +368,8 @@ client.on('message', async (msg) => {
                 console.log(`[DASHBOARD] ${userName} requested dashboard`);
             } catch (error) {
                 console.error('[DASHBOARD ERROR]', error);
-                await msg.reply('❌ Error loading dashboard. Please try again.');
+                await replyWithDelay(msg, '❌ Error loading dashboard. Please try again.');
+                messageCounter.incrementCounter();
             }
             return;
         }
@@ -354,7 +377,8 @@ client.on('message', async (msg) => {
         // Cancel order command: /cancel
         if (msg.body.trim().toLowerCase() === '/cancel') {
             if (!isGroup) {
-                await msg.reply('❌ Cancel command only works in groups.');
+                await replyWithDelay(msg, '❌ Cancel command only works in groups.');
+                messageCounter.incrementCounter();
                 return;
             }
             
@@ -411,7 +435,8 @@ client.on('message', async (msg) => {
             // Check if system is OFF
             if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
                 const offMessage = diamondSystemStatus.globalMessage || '❌ ডায়মন্ড সিস্টেম বর্তমানে বন্ধ আছে।';
-                await msg.reply(offMessage);
+                await replyWithDelay(msg, offMessage);
+                messageCounter.incrementCounter();
                 console.log(`[SYSTEM-OFF] Rejected multi-line request - System is OFF`);
                 return;
             }
@@ -452,7 +477,8 @@ client.on('message', async (msg) => {
             // Check if system is OFF
             if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
                 const offMessage = diamondSystemStatus.globalMessage || '❌ ডায়মন্ড সিস্টেম বর্তমানে বন্ধ আছে।';
-                await msg.reply(offMessage);
+                await replyWithDelay(msg, offMessage);
+                messageCounter.incrementCounter();
                 console.log(`[SYSTEM-OFF] Rejected diamond request - System is OFF`);
                 return;
             }
@@ -485,12 +511,39 @@ client.on('message', async (msg) => {
         // Admin approval: done, ok, do, dn, yes, অক, okey, ওকে (for diamond orders)
         const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
         if (approvalKeywords.includes(msg.body.toLowerCase().trim()) && isGroup) {
-            if (!isAdminUser) {
-                await msg.reply('❌ Only admins can approve orders.');
+            // 🤖 Auto-register new admins when they send approval commands
+            const userName = msg._data?.notifyName || msg.author || fromUserId;
+            autoRegisterAdmin(msg.author || fromUserId, userName);
+            
+            // 🔍 Better admin check - try multiple ID formats
+            let isAdminForApproval = isAdminUser;
+            
+            // If not detected, try checking with msg.author directly
+            if (!isAdminForApproval && msg.author) {
+                isAdminForApproval = isAdminByAnyVariant(msg.author);
+                console.log(`[APPROVAL DEBUG] Re-checked admin with msg.author (${msg.author}): ${isAdminForApproval}`);
+            }
+            
+            // Also try with fromUserId
+            if (!isAdminForApproval && fromUserId) {
+                isAdminForApproval = isAdminByAnyVariant(fromUserId);
+                console.log(`[APPROVAL DEBUG] Re-checked admin with fromUserId (${fromUserId}): ${isAdminForApproval}`);
+            }
+            
+            // Log debug info
+            const adminInfo = isAdminForApproval ? getAdminInfo(msg.author || fromUserId) : null;
+            console.log(`[APPROVAL DEBUG] Admin check - fromUserId: ${fromUserId}, msg.author: ${msg.author}`);
+            console.log(`[APPROVAL DEBUG] isAdminUser: ${isAdminUser}, isAdminForApproval: ${isAdminForApproval}`);
+            if (adminInfo) console.log(`[APPROVAL DEBUG] Admin info: ${adminInfo.name} (${adminInfo.phone})`);
+            
+            if (!isAdminForApproval) {
+                await replyWithDelay(msg, '❌ Only admins can approve orders.');
+                messageCounter.incrementCounter();
                 return;
             }
             if (!msg.hasQuotedMsg) {
-                await msg.reply('❌ Please reply to a user order to approve it.');
+                await replyWithDelay(msg, '❌ Please reply to a user order to approve it.');
+                messageCounter.incrementCounter();
                 return;
             }
             
@@ -515,7 +568,8 @@ client.on('message', async (msg) => {
                     const approveMessageEnabled = diamondStatus.approveMessageEnabled !== false;
                     
                     if (approveMessageEnabled) {
-                        await msg.reply(approvalResult.message);
+                        await replyWithDelay(msg, approvalResult.message);
+                        messageCounter.incrementCounter();
                     }
                     console.log(`[APPROVED] Multi-line diamond order: ${approvalResult.diamonds}💎 from ${approvalResult.userIdFromMsg} (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
                 }
@@ -578,11 +632,13 @@ client.on('message', async (msg) => {
                 const approveMessageEnabled = diamondStatus.approveMessageEnabled !== false;
                 
                 if (approveMessageEnabled) {
-                    await msg.reply(approvalMsg);
+                    await replyWithDelay(msg, approvalMsg);
+                    messageCounter.incrementCounter();
                 }
                 console.log(`[APPROVED] Order ID ${pendingEntry.id}: ${pendingEntry.diamonds}💎 from ${userName} (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
             } else {
-                await msg.reply('❌ No pending diamond order found for this user.');
+                await replyWithDelay(msg, '❌ No pending diamond order found for this user.');
+                messageCounter.incrementCounter();
             }
             
             return;
@@ -591,12 +647,20 @@ client.on('message', async (msg) => {
         // Admin payment receipt: amount//rcv (e.g., 100//rcv)
         const paymentMatch = msg.body.trim().match(/^(\d+(?:\.\d{1,2})?)\/\/rcv$/i);
         if (paymentMatch && isGroup) {
-            if (!isAdminUser) {
-                await msg.reply('❌ Only admins can process payments/deposits.');
+            // Better admin check
+            let isAdminForPayment = isAdminUser;
+            if (!isAdminForPayment && msg.author) {
+                isAdminForPayment = isAdminByAnyVariant(msg.author);
+            }
+            
+            if (!isAdminForPayment) {
+                await replyWithDelay(msg, '❌ Only admins can process payments/deposits.');
+                messageCounter.incrementCounter();
                 return;
             }
             if (!msg.hasQuotedMsg) {
-                await msg.reply('❌ Please reply to a user message to process payment/deposit.');
+                await replyWithDelay(msg, '❌ Please reply to a user message to process payment/deposit.');
+                messageCounter.incrementCounter();
                 return;
             }
             
@@ -633,15 +697,18 @@ client.on('message', async (msg) => {
             
             if (depositResult.success) {
                 // Deposit approved
-                await msg.reply(depositResult.adminMessage);
+                await replyWithDelay(msg, depositResult.adminMessage);
+                messageCounter.incrementCounter();
                 
                 // Send user notification
                 try {
                     const userChat = await client.getChatById(quotedUserId);
-                    await userChat.sendMessage(depositResult.userMessage);
+                    await sendMessageWithDelay(client, quotedUserId, depositResult.userMessage);
+                    messageCounter.incrementCounter();
                 } catch (err) {
                     console.log('Could not send direct message to user:', err);
-                    await msg.reply(`📲 User notification: ${depositResult.userMessage}`);
+                    await replyWithDelay(msg, `📲 User notification: ${depositResult.userMessage}`);
+                    messageCounter.incrementCounter();
                 }
             } else {
                 // Not a deposit, try as payment for order dues
@@ -649,7 +716,8 @@ client.on('message', async (msg) => {
                 
                 if (paymentResult.success) {
                     // Send admin confirmation
-                    await msg.reply(paymentResult.adminMessage);
+                    await replyWithDelay(msg, paymentResult.adminMessage);
+                    messageCounter.incrementCounter();
                     
                     // Notify admin panel about manual payment
                     try {
@@ -672,13 +740,16 @@ client.on('message', async (msg) => {
                     // Send user notification
                     try {
                         const userChat = await client.getChatById(quotedUserId);
-                        await userChat.sendMessage(paymentResult.userMessage);
+                        await sendMessageWithDelay(client, quotedUserId, paymentResult.userMessage);
+                        messageCounter.incrementCounter();
                     } catch (err) {
                         console.log('Could not send direct message to user:', err);
-                        await msg.reply(`📲 User notification failed. Message them: ${paymentResult.userMessage}`);
+                        await replyWithDelay(msg, `📲 User notification failed. Message them: ${paymentResult.userMessage}`);
+                        messageCounter.incrementCounter();
                     }
                 } else {
-                    await msg.reply(paymentResult.adminMessage);
+                    await replyWithDelay(msg, paymentResult.adminMessage);
+                    messageCounter.incrementCounter();
                 }
             }
             
@@ -688,7 +759,8 @@ client.on('message', async (msg) => {
         // Show pending deposits command
         if (msg.body.trim() === '/pendingdeposits') {
             if (!isAdminUser) {
-                await msg.reply('❌ Only admins can view pending deposits.');
+                await replyWithDelay(msg, '❌ Only admins can view pending deposits.');
+                messageCounter.incrementCounter();
                 return;
             }
             await showPendingDeposits(msg);
@@ -700,7 +772,8 @@ client.on('message', async (msg) => {
             if (isGroup) {
                 await showPendingRequests(msg, groupId);
             } else {
-                await msg.reply('❌ This command works only in groups.');
+                await replyWithDelay(msg, '❌ This command works only in groups.');
+                messageCounter.incrementCounter();
             }
             return;
         }
@@ -723,7 +796,8 @@ client.on('message', async (msg) => {
         // Deposit stats command: /depstats
         if (msg.body.trim() === '/depstats') {
             if (!isAdminUser) {
-                await msg.reply('❌ Only admins can view deposit statistics.');
+                await replyWithDelay(msg, '❌ Only admins can view deposit statistics.');
+                messageCounter.incrementCounter();
                 return;
             }
             await showDepositStats(msg);
@@ -745,7 +819,8 @@ client.on('message', async (msg) => {
                     if (matchedCmd) {
                         // Check category permissions
                         if (matchedCmd.category === 'admin' && !isAdminUser) {
-                            await msg.reply('❌ This is an admin-only command.');
+                            await replyWithDelay(msg, '❌ This is an admin-only command.');
+                            messageCounter.incrementCounter();
                             return;
                         }
                         
@@ -766,7 +841,8 @@ client.on('message', async (msg) => {
                             }
                         }
                         
-                        await msg.reply(response);
+                        await replyWithDelay(msg, response);
+                        messageCounter.incrementCounter();
                         return;
                     }
                 }
@@ -793,15 +869,23 @@ client.on('message', async (msg) => {
                 `/depstats - View deposit statistics\n` +
                 `Reply with "/addadmin phone_number name" to add new admin`;
             
-            await msg.reply(helpText);
+            await replyWithDelay(msg, helpText);
+            messageCounter.incrementCounter();
             return;
         }
         
         // Add admin command (only for existing admins)
         const addAdminMatch = msg.body.trim().match(/^\/addadmin\s+(\d+)\s+(.+)$/);
         if (addAdminMatch) {
-            if (!isAdminUser) {
-                await msg.reply('❌ Only admins can add new admins.');
+            // Better admin check
+            let isAdminForAddingAdmin = isAdminUser;
+            if (!isAdminForAddingAdmin && msg.author) {
+                isAdminForAddingAdmin = isAdminByAnyVariant(msg.author);
+            }
+            
+            if (!isAdminForAddingAdmin) {
+                await replyWithDelay(msg, '❌ Only admins can add new admins.');
+                messageCounter.incrementCounter();
                 return;
             }
             
@@ -812,10 +896,13 @@ client.on('message', async (msg) => {
             const result = db.addAdmin(phone, whatsappId, name);
             
             if (result.success) {
-                await msg.reply(`✅ *Admin Added*\n\nPhone: +${phone}\nName: ${name}\nStatus: Active`);
+                await replyWithDelay(msg, `✅ *Admin Added*\n\nPhone: +${phone}\nName: ${name}\nStatus: Active\n\n📱 New admin WhatsApp ID: ${whatsappId}`);
+                messageCounter.incrementCounter();
                 console.log(`[ADMIN] New admin added: ${name} (+${phone})`);
+                console.log(`[ADMIN] WhatsApp ID: ${whatsappId}`);
             } else {
-                await msg.reply(`❌ ${result.message}`);
+                await replyWithDelay(msg, `❌ ${result.message}`);
+                messageCounter.incrementCounter();
             }
             return;
         }
@@ -1002,8 +1089,8 @@ client.on('message_edit', async (msg, newBody, prevBody) => {
             }
             
             try {
-                const chat = await client.getChatById(fromUserId);
-                await chat.sendMessage(userMessage);
+                await sendMessageWithDelay(client, fromUserId, userMessage);
+                messageCounter.incrementCounter();
                 console.log('[EDIT EVENT] Sent error message to group');
             } catch (msgError) {
                 console.error('[EDIT EVENT] Failed to send message:', msgError.message);
@@ -1253,6 +1340,38 @@ app.post('/api/send-group-message', async (req, res) => {
     } catch (error) {
         console.error('[GROUP-MESSAGE] Error:', error.message);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// 🛡️ Message statistics endpoint - for monitoring safety
+app.get('/api/message-stats', (req, res) => {
+    try {
+        const stats = messageCounter.getStatus();
+        res.json({
+            success: true,
+            stats: stats,
+            botStatus: botIsReady ? 'connected' : 'disconnected',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('[MESSAGE-STATS] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 🛡️ Message statistics endpoint - for monitoring safety
+app.get('/api/message-stats', (req, res) => {
+    try {
+        const stats = messageCounter.getStatus();
+        res.json({
+            success: true,
+            stats: stats,
+            botStatus: botIsReady ? 'connected' : 'disconnected',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('[MESSAGE-STATS] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

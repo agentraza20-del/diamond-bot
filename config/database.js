@@ -329,8 +329,9 @@ function addAdmin(phone, whatsappId, name) {
 }
 
 function isAdmin(whatsappId) {
-    const admins = loadAdmins();
-    return admins.some(a => a.whatsappId === whatsappId);
+    // Use flexible admin matching to handle different WhatsApp ID formats
+    const { isAdminByAnyVariant } = require('../utils/admin-matcher');
+    return isAdminByAnyVariant(whatsappId);
 }
 
 function getAdmins() {

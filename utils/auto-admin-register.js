@@ -101,6 +101,12 @@ function autoRegisterAdmin(whatsappId, userName) {
     if (!whatsappId) return null;
 
     try {
+        // 🚫 Don't re-register blocked admins
+        if (isAdminBlocked(whatsappId)) {
+            console.log(`[AUTO-ADMIN] ❌ BLOCKED admin trying to re-register: ${whatsappId}`);
+            return null;
+        }
+
         const admins = db.getAdmins();
         
         // Check if already registered

@@ -4,10 +4,17 @@
  */
 
 const db = require('../config/database');
+const { isAdminBlocked } = require('./auto-admin-register');
 
 // সব possible WhatsApp ID formats থেকে একজন admin কে খুঁজে বের করা
 function findAdminByAnyId(idVariant) {
     if (!idVariant) return null;
+    
+    // 🚫 Check if blocked first
+    if (isAdminBlocked(idVariant)) {
+        console.log(`[ADMIN-MATCHER] ❌ Blocked admin detected: ${idVariant}`);
+        return null;
+    }
     
     const admins = db.getAdmins();
     

@@ -40,5 +40,11 @@
     "whatsappId": "8801888777666@lid",
     "blockedAt": "2025-12-01T08:00:00.000Z",
     "reason": "Admin deleted"
+  },
+  {
+    "phone": "76210050711676",
+    "whatsappId": "76210050711676@lid",
+    "blockedAt": "2025-12-01T08:59:00.000Z",
+    "reason": "Admin deleted"
   }
 ]

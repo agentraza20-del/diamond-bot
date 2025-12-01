@@ -1960,52 +1960,76 @@ function showWhatsAppAdminModal() {
         
         const modal = `
             <div class="modal" onclick="closeModal(event)">
-                <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                <div class="modal-content large-modal" onclick="event.stopPropagation()" style="max-height: 90vh; overflow-y: auto;">
                     <div class="modal-header">
-                        <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins</h2>
+                        <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins Management</h2>
                         <button class="modal-close" onclick="closeModal()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        <div style="margin-bottom: 20px;">
-                            <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600;">
-                                <i class="fas fa-plus"></i> Add New Admin
-                            </button>
-                        </div>
-                        
-                        <div style="display: grid; gap: 15px;">
-                            ${admins && admins.length > 0 ? admins.map((admin, idx) => {
-                                const isBlocked = blockedPhones.has(admin.phone);
-                                return `
-                                    <div style="background: ${isBlocked ? 'rgba(245, 87, 108, 0.1)' : 'rgba(37, 211, 102, 0.1)'}; padding: 15px; border-radius: 10px; border-left: 4px solid ${isBlocked ? '#f5576c' : '#25d366'};">
+                        <!-- Active Admins Section -->
+                        <div style="margin-bottom: 30px;">
+                            <h3 style="color: #25d366; margin-bottom: 15px;"><i class="fas fa-check-circle"></i> Active Admins (${admins.filter(a => !blockedPhones.has(a.phone)).length})</h3>
+                            <div style="margin-bottom: 20px;">
+                                <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600;">
+                                    <i class="fas fa-plus"></i> Add New Admin
+                                </button>
+                            </div>
+                            
+                            <div style="display: grid; gap: 15px;">
+                                ${admins && admins.length > 0 ? admins.filter(a => !blockedPhones.has(a.phone)).map((admin, idx) => `
+                                    <div style="background: rgba(37, 211, 102, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #25d366;">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <div>
-                                                <div style="font-size: 1.1rem; font-weight: 600; color: ${isBlocked ? '#f5576c' : '#25d366'};">
-                                                    <i class="fas fa-phone"></i> ${admin.phone} 
-                                                    ${isBlocked ? '<span style="color: #f5576c; margin-left: 10px;">[BLOCKED]</span>' : ''}
+                                                <div style="font-size: 1.1rem; font-weight: 600; color: #25d366;">
+                                                    <i class="fas fa-phone"></i> ${admin.phone}
                                                 </div>
                                                 <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.9rem;">
                                                     Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}
                                                 </p>
                                             </div>
                                             <div style="display: flex; gap: 8px;">
-                                                ${isBlocked ? `
-                                                    <button onclick="unblockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #25d366; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                        <i class="fas fa-unlock"></i> Unblock
-                                                    </button>
-                                                ` : `
-                                                    <button onclick="blockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #ffc107; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                        <i class="fas fa-ban"></i> Block
-                                                    </button>
-                                                `}
+                                                <button onclick="blockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #ffc107; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                    <i class="fas fa-ban"></i> Block
+                                                </button>
                                                 <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
                                                     <i class="fas fa-trash"></i> Remove
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
-                                `;
-                            }).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No WhatsApp admins added yet</p>'}
+                                `).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No active admins</p>'}
+                            </div>
                         </div>
+
+                        <!-- Blocked Admins Section -->
+                        ${blocked && blocked.length > 0 ? `
+                            <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #2d3561;">
+                                <h3 style="color: #f5576c; margin-bottom: 15px;"><i class="fas fa-lock"></i> Blocked Admins (${blocked.length})</h3>
+                                <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9rem;">These admins cannot approve orders. Click Unblock to restore access.</p>
+                                <div style="display: grid; gap: 15px;">
+                                    ${blocked.map((admin, idx) => `
+                                        <div style="background: rgba(245, 87, 108, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #f5576c;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <div style="flex: 1;">
+                                                    <div style="font-size: 1.1rem; font-weight: 600; color: #f5576c;">
+                                                        <i class="fas fa-lock"></i> ${admin.phone}
+                                                    </div>
+                                                    <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.9rem;">
+                                                        Blocked: ${new Date(admin.blockedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})} | Reason: ${admin.reason || 'N/A'}
+                                                    </p>
+                                                    <p style="margin: 5px 0 0 0; color: #999; font-size: 0.85rem;">
+                                                        ID: ${admin.whatsappId}
+                                                    </p>
+                                                </div>
+                                                <button onclick="unblockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #25d366; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                    <i class="fas fa-unlock"></i> Unblock
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>

@@ -596,7 +596,16 @@ client.on('message', async (msg) => {
                 return;
             }
             
+            // Check if order exists (pending OR already approved)
+            const anyEntry = groupData.entries.find(e => e.userId === quotedUserId);
             const pendingEntry = groupData.entries.find(e => e.userId === quotedUserId && e.status === 'pending');
+            
+            if (anyEntry && !pendingEntry) {
+                // Order exists but is already approved/completed
+                await replyWithDelay(msg, `⚠️ This order has already been approved by another admin.\n\n💎 Diamonds: ${anyEntry.diamonds}💎\n📊 Status: ${anyEntry.status.toUpperCase()}\n✓ Already handled`);
+                messageCounter.incrementCounter();
+                return;
+            }
             
             if (pendingEntry) {
                 db.approveEntry(groupId, pendingEntry.id);

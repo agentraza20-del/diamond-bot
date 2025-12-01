@@ -1946,52 +1946,75 @@ function deletePaymentNumber(idx) {
 }
 
 function showWhatsAppAdminModal() {
-    fetch('/api/whatsapp-admins')
-        .then(res => res.json())
-        .then(data => {
-            const admins = data.whatsappAdmins || [];
-            const modal = `
-                <div class="modal" onclick="closeModal(event)">
-                    <div class="modal-content large-modal" onclick="event.stopPropagation()">
-                        <div class="modal-header">
-                            <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins</h2>
-                            <button class="modal-close" onclick="closeModal()">&times;</button>
+    // Fetch both active admins and blocked admins
+    Promise.all([
+        fetch('/api/whatsapp-admins').then(res => res.json()),
+        fetch('/api/blocked-admins').then(res => res.json()).catch(() => ({ blockedAdmins: [] }))
+    ])
+    .then(([data, blockedData]) => {
+        const admins = data.whatsappAdmins || [];
+        const blocked = blockedData.blockedAdmins || [];
+        
+        // Create a map of blocked phone numbers for quick lookup
+        const blockedPhones = new Set(blocked.map(b => b.phone));
+        
+        const modal = `
+            <div class="modal" onclick="closeModal(event)">
+                <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="margin-bottom: 20px;">
+                            <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600;">
+                                <i class="fas fa-plus"></i> Add New Admin
+                            </button>
                         </div>
-                        <div class="modal-body">
-                            <div style="margin-bottom: 20px;">
-                                <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600;">
-                                    <i class="fas fa-plus"></i> Add New Admin
-                                </button>
-                            </div>
-                            
-                            <div style="display: grid; gap: 15px;">
-                                ${admins && admins.length > 0 ? admins.map((admin, idx) => `
-                                    <div style="background: rgba(37, 211, 102, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #25d366;">
+                        
+                        <div style="display: grid; gap: 15px;">
+                            ${admins && admins.length > 0 ? admins.map((admin, idx) => {
+                                const isBlocked = blockedPhones.has(admin.phone);
+                                return `
+                                    <div style="background: ${isBlocked ? 'rgba(245, 87, 108, 0.1)' : 'rgba(37, 211, 102, 0.1)'}; padding: 15px; border-radius: 10px; border-left: 4px solid ${isBlocked ? '#f5576c' : '#25d366'};">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <div>
-                                                <div style="font-size: 1.1rem; font-weight: 600; color: #25d366;">
-                                                    <i class="fas fa-phone"></i> ${admin.phone}
+                                                <div style="font-size: 1.1rem; font-weight: 600; color: ${isBlocked ? '#f5576c' : '#25d366'};">
+                                                    <i class="fas fa-phone"></i> ${admin.phone} 
+                                                    ${isBlocked ? '<span style="color: #f5576c; margin-left: 10px;">[BLOCKED]</span>' : ''}
                                                 </div>
                                                 <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.9rem;">
                                                     Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}
                                                 </p>
                                             </div>
-                                            <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                <i class="fas fa-trash"></i> Remove
-                                            </button>
+                                            <div style="display: flex; gap: 8px;">
+                                                ${isBlocked ? `
+                                                    <button onclick="unblockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #25d366; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                        <i class="fas fa-unlock"></i> Unblock
+                                                    </button>
+                                                ` : `
+                                                    <button onclick="blockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #ffc107; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                        <i class="fas fa-ban"></i> Block
+                                                    </button>
+                                                `}
+                                                <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                    <i class="fas fa-trash"></i> Remove
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                `).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No WhatsApp admins added yet</p>'}
-                            </div>
+                                `;
+                            }).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No WhatsApp admins added yet</p>'}
                         </div>
                     </div>
                 </div>
-            `;
-            document.getElementById('modalContainer').innerHTML = modal;
-        })
-        .catch(err => {
-            alert('Error loading WhatsApp admins: ' + err.message);
-        });
+            </div>
+        `;
+        document.getElementById('modalContainer').innerHTML = modal;
+    })
+    .catch(err => {
+        alert('Error loading WhatsApp admins: ' + err.message);
+    });
 }
 
 function showAddWhatsAppAdminModal() {
@@ -2097,6 +2120,46 @@ function deleteWhatsAppAdmin(idx) {
                 }
             })
             .catch(err => alert('Error: ' + err.message));
+    }
+}
+
+function blockWhatsAppAdmin(phone) {
+    if (confirm(`Block admin ${phone} from approving orders?`)) {
+        fetch('/api/whatsapp-admins/block', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Admin blocked successfully');
+                showWhatsAppAdminModal();
+            } else {
+                alert('Error blocking admin: ' + data.error);
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+}
+
+function unblockWhatsAppAdmin(phone) {
+    if (confirm(`Unblock admin ${phone}?`)) {
+        fetch('/api/whatsapp-admins/unblock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Admin unblocked successfully');
+                showWhatsAppAdminModal();
+            } else {
+                alert('Error unblocking admin: ' + data.error);
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
     }
 }
 

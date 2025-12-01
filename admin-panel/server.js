@@ -1075,6 +1075,89 @@ app.delete('/api/whatsapp-admins/delete/:index', async (req, res) => {
     }
 });
 
+// Get blocked admins
+app.get('/api/blocked-admins', async (req, res) => {
+    try {
+        const blockedAdminsPath = path.join(__dirname, '..', 'config', 'blocked-admins.json');
+        const blockedAdmins = await readJSON(blockedAdminsPath);
+        res.json({ blockedAdmins: Array.isArray(blockedAdmins) ? blockedAdmins : [] });
+    } catch (error) {
+        res.json({ blockedAdmins: [] });
+    }
+});
+
+// Block WhatsApp Admin
+app.post('/api/whatsapp-admins/block', async (req, res) => {
+    try {
+        const { phone } = req.body;
+        if (!phone) {
+            return res.status(400).json({ error: 'Phone number is required' });
+        }
+
+        const blockedAdminsPath = path.join(__dirname, '..', 'config', 'blocked-admins.json');
+        let blockedAdmins = await readJSON(blockedAdminsPath);
+        if (!Array.isArray(blockedAdmins)) blockedAdmins = [];
+
+        // Check if already blocked
+        if (blockedAdmins.some(b => b.phone === phone)) {
+            return res.json({ success: true, message: 'Admin already blocked' });
+        }
+
+        // Add to blocked list
+        blockedAdmins.push({
+            phone: phone,
+            whatsappId: phone + '@c.us',
+            blockedAt: new Date().toISOString(),
+            reason: 'Blocked via admin panel'
+        });
+
+        await writeJSON(blockedAdminsPath, blockedAdmins);
+
+        // Log the action
+        const logEntry = `[${new Date().toISOString()}] Blocked WhatsApp admin: ${phone}`;
+        const logsPath = path.join(__dirname, 'admin-logs.txt');
+        const existingLogs = await fs.readFile(logsPath, 'utf8').catch(() => '');
+        await fs.writeFile(logsPath, existingLogs + logEntry + '\n');
+
+        res.json({ success: true, message: 'Admin blocked successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Unblock WhatsApp Admin
+app.post('/api/whatsapp-admins/unblock', async (req, res) => {
+    try {
+        const { phone } = req.body;
+        if (!phone) {
+            return res.status(400).json({ error: 'Phone number is required' });
+        }
+
+        const blockedAdminsPath = path.join(__dirname, '..', 'config', 'blocked-admins.json');
+        let blockedAdmins = await readJSON(blockedAdminsPath);
+        if (!Array.isArray(blockedAdmins)) blockedAdmins = [];
+
+        // Remove from blocked list
+        const filtered = blockedAdmins.filter(b => b.phone !== phone);
+        
+        if (filtered.length !== blockedAdmins.length) {
+            await writeJSON(blockedAdminsPath, filtered);
+            
+            // Log the action
+            const logEntry = `[${new Date().toISOString()}] Unblocked WhatsApp admin: ${phone}`;
+            const logsPath = path.join(__dirname, 'admin-logs.txt');
+            const existingLogs = await fs.readFile(logsPath, 'utf8').catch(() => '');
+            await fs.writeFile(logsPath, existingLogs + logEntry + '\n');
+
+            res.json({ success: true, message: 'Admin unblocked successfully' });
+        } else {
+            res.json({ success: true, message: 'Admin was not blocked' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Analytics Data
 app.get('/api/analytics', async (req, res) => {
     try {

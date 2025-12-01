@@ -8,6 +8,88 @@ const fs = require('fs');
 const path = require('path');
 
 const ADMINS_FILE = path.join(__dirname, '../config/admins.json');
+const BLOCKED_FILE = path.join(__dirname, '../config/blocked-admins.json');
+
+/**
+ * Load blocked admins list
+ */
+function loadBlockedAdmins() {
+    try {
+        const data = fs.readFileSync(BLOCKED_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        return [];
+    }
+}
+
+/**
+ * Check if admin is blocked
+ */
+function isAdminBlocked(whatsappId) {
+    if (!whatsappId) return false;
+    const blocked = loadBlockedAdmins();
+    return blocked.some(b => 
+        b.whatsappId === whatsappId || 
+        b.phone === whatsappId.match(/^(\d+)/)?.[1]
+    );
+}
+
+/**
+ * Block an admin (remove from active admins)
+ */
+function blockAdmin(whatsappId, reason) {
+    if (!whatsappId) return null;
+
+    try {
+        const blocked = loadBlockedAdmins();
+        const phoneMatch = whatsappId.match(/^(\d+)/);
+        const phone = phoneMatch ? phoneMatch[1] : whatsappId;
+
+        // Check if already blocked
+        if (blocked.some(b => b.whatsappId === whatsappId)) {
+            console.log(`[BLOCKED-ADMIN] Already blocked: ${whatsappId}`);
+            return blocked.find(b => b.whatsappId === whatsappId);
+        }
+
+        const blockedEntry = {
+            phone: phone,
+            whatsappId: whatsappId,
+            blockedAt: new Date().toISOString(),
+            reason: reason || 'Manual removal'
+        };
+
+        blocked.push(blockedEntry);
+        fs.writeFileSync(BLOCKED_FILE, JSON.stringify(blocked, null, 2));
+
+        console.log(`[BLOCKED-ADMIN] ✅ Admin blocked: ${whatsappId} - Reason: ${reason}`);
+        return blockedEntry;
+    } catch (err) {
+        console.error(`[BLOCKED-ADMIN] Error blocking admin:`, err.message);
+        return null;
+    }
+}
+
+/**
+ * Unblock an admin
+ */
+function unblockAdmin(whatsappId) {
+    if (!whatsappId) return false;
+
+    try {
+        const blocked = loadBlockedAdmins();
+        const filtered = blocked.filter(b => b.whatsappId !== whatsappId);
+
+        if (filtered.length !== blocked.length) {
+            fs.writeFileSync(BLOCKED_FILE, JSON.stringify(filtered, null, 2));
+            console.log(`[BLOCKED-ADMIN] ✅ Admin unblocked: ${whatsappId}`);
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error(`[BLOCKED-ADMIN] Error unblocking admin:`, err.message);
+        return false;
+    }
+}
 
 /**
  * Auto-register a new admin if they're not already in the system
@@ -86,5 +168,9 @@ function checkAndAutoRegisterAdmin(whatsappId, userName, messageBody) {
 
 module.exports = {
     autoRegisterAdmin,
-    checkAndAutoRegisterAdmin
+    checkAndAutoRegisterAdmin,
+    isAdminBlocked,
+    blockAdmin,
+    unblockAdmin,
+    loadBlockedAdmins
 };

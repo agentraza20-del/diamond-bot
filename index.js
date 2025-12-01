@@ -20,7 +20,7 @@ const { delay, replyWithDelay, sendMessageWithDelay, messageCounter } = require(
 const { isAdminByAnyVariant, getAdminInfo } = require('./utils/admin-matcher');
 
 // 🤖 Auto Admin Registration
-const { autoRegisterAdmin, checkAndAutoRegisterAdmin } = require('./utils/auto-admin-register');
+const { autoRegisterAdmin, checkAndAutoRegisterAdmin, isAdminBlocked } = require('./utils/auto-admin-register');
 
 // Connect to Admin Panel Socket.IO server
 const adminSocket = io('http://localhost:3000');
@@ -511,6 +511,15 @@ client.on('message', async (msg) => {
         // Admin approval: done, ok, do, dn, yes, অক, okey, ওকে (for diamond orders)
         const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
         if (approvalKeywords.includes(msg.body.toLowerCase().trim()) && isGroup) {
+            // 🚫 Check if admin is blocked (removed)
+            const adminIdToCheck = msg.author || fromUserId;
+            if (isAdminBlocked(adminIdToCheck)) {
+                console.log(`[APPROVAL DEBUG] ❌ BLOCKED ADMIN attempting approval: ${adminIdToCheck}`);
+                await replyWithDelay(msg, '❌ This admin account has been removed and cannot approve orders.');
+                messageCounter.incrementCounter();
+                return;
+            }
+            
             // 🤖 Auto-register new admins when they send approval commands
             const userName = msg._data?.notifyName || msg.author || fromUserId;
             autoRegisterAdmin(msg.author || fromUserId, userName);

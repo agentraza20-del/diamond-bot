@@ -40,5 +40,13 @@
     "role": "admin",
     "addedAt": "2025-12-01T07:06:28.650Z",
     "autoAdded": true
+  },
+  {
+    "phone": "8801888777666",
+    "whatsappId": "8801888777666@lid",
+    "name": "Test Admin",
+    "role": "admin",
+    "addedAt": "2025-12-01T07:40:54.243Z",
+    "autoAdded": true
   }
 ]

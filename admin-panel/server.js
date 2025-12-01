@@ -62,6 +62,7 @@ const adminCredentialsPath = path.join(dbPath, 'admin-credentials.json');
 // Admin panel specific paths
 const adminPath = path.join(__dirname);
 const autoDeductionsPath = path.join(adminPath, 'auto-deductions.json');
+const profilePicDir = path.join(__dirname, '..', 'config', 'profile-pics');
 
 // Active sessions
 const activeSessions = new Set();
@@ -268,6 +269,10 @@ app.get('/api/groups', async (req, res) => {
                 const userOrders = approvedEntries.filter(e => e.userId === userId);
                 const userOrderAmount = userOrders.reduce((sum, entry) => sum + (entry.diamonds * entry.rate), 0);
                 
+                // Get WhatsApp display name from the most recent entry for this user
+                const mostRecentEntry = userOrders[userOrders.length - 1];
+                const whatsappDisplayName = mostRecentEntry?.userName || userData?.name || userId.substring(0, 15);
+                
                 // Calculate how much this user has paid through auto-deductions
                 let userPaidAmount = 0;
                 if (Array.isArray(transactions)) {
@@ -287,7 +292,7 @@ app.get('/api/groups', async (req, res) => {
                 
                 return {
                     userId: userId,
-                    displayName: userData?.name || userId.substring(0, 15),
+                    displayName: whatsappDisplayName,
                     orderAmount: Math.round(userOrderAmount),
                     balance: Math.round(userBalance),
                     paid: Math.round(userPaidAmount),
@@ -529,7 +534,9 @@ app.get('/api/users', async (req, res) => {
         const usersArray = Object.entries(users).map(([phone, data]) => {
             // Calculate due from groups
             let calculatedDue = 0;
+            let whatsappName = null;
             const groups = database.groups || {};
+            
             Object.values(groups).forEach(group => {
                 const entries = group.entries || [];
                 entries.forEach(entry => {
@@ -537,6 +544,10 @@ app.get('/api/users', async (req, res) => {
                     if (entry.userId === phone || entry.userId === `${phone}@lid` || entry.userName === phone || entry.userName === `${phone}@lid`) {
                         if (entry.status === 'approved') {
                             calculatedDue += (entry.diamonds || 0) * (entry.rate || 0);
+                        }
+                        // Get WhatsApp display name from most recent entry
+                        if (entry.userName && !whatsappName) {
+                            whatsappName = entry.userName;
                         }
                     }
                 });
@@ -548,6 +559,7 @@ app.get('/api/users', async (req, res) => {
             return {
                 phone,
                 name: data.name || 'Unknown',
+                whatsappName: whatsappName || data.name || 'Unknown',
                 balance: data.balance || 0,
                 dueBalance,
                 totalDeposits: data.totalDeposits || 0,
@@ -920,6 +932,11 @@ app.post('/api/payment-numbers/add', async (req, res) => {
         const payload = req.body;
         const paymentData = await readJSON(path.join(dbPath, 'payment-number.json'));
 
+        // Set enabled to true by default
+        if (payload.enabled === undefined) {
+            payload.enabled = true;
+        }
+
         // Add to paymentNumbers array
         paymentData.paymentNumbers.push(payload);
         
@@ -953,6 +970,31 @@ app.delete('/api/payment-numbers/delete/:index', async (req, res) => {
     }
 });
 
+// Toggle Payment Number Status (ON/OFF)
+app.post('/api/payment-numbers/toggle/:index', async (req, res) => {
+    try {
+        const index = parseInt(req.params.index);
+        const paymentData = await readJSON(path.join(dbPath, 'payment-number.json'));
+
+        if (index >= 0 && index < paymentData.paymentNumbers.length) {
+            // Toggle the enabled status
+            paymentData.paymentNumbers[index].enabled = !paymentData.paymentNumbers[index].enabled;
+            await writeJSON(path.join(dbPath, 'payment-number.json'), paymentData);
+            
+            io.emit('paymentNumberUpdated', paymentData);
+            res.json({ 
+                success: true, 
+                payment: paymentData.paymentNumbers[index],
+                status: paymentData.paymentNumbers[index].enabled ? 'enabled' : 'disabled'
+            });
+        } else {
+            res.status(400).json({ error: 'Invalid index' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // WhatsApp Admin Management Endpoints
 const whatsappAdminsPath = path.join(__dirname, 'whatsapp-admins.json');
 
@@ -969,7 +1011,9 @@ app.get('/api/whatsapp-admins', async (req, res) => {
 // Add WhatsApp Admin
 app.post('/api/whatsapp-admins/add', async (req, res) => {
     try {
-        const { phone } = req.body;
+        const { phone, name } = req.body;
+        
+        console.log(`[ADMIN-ADD] Received request - Phone: ${phone}, Name: ${name}`);
         
         if (!phone) {
             return res.status(400).json({ error: 'Phone number is required' });
@@ -985,13 +1029,17 @@ app.post('/api/whatsapp-admins/add', async (req, res) => {
             return res.status(400).json({ error: 'This phone number is already an admin' });
         }
 
-        // Add new admin to admin panel file
+        // Add new admin to admin panel file with name
+        const whatsappId = phone + '@lid';
         admins.whatsappAdmins.push({
             phone: phone,
+            name: name || 'Admin',
+            whatsappId: whatsappId,
             addedAt: new Date().toISOString()
         });
 
         await writeJSON(whatsappAdminsPath, admins);
+        console.log(`[ADMIN-ADD] ✅ Saved to whatsapp-admins.json`);
 
         // ALSO ADD TO BOT SIDE admins.json
         const botAdminsPath = path.join(__dirname, '..', 'config', 'admins.json');
@@ -1004,14 +1052,15 @@ app.post('/api/whatsapp-admins/add', async (req, res) => {
         }
 
         // Add to bot admins if not already there
-        const whatsappId = phone + '@lid';
         if (!botAdmins.some(a => a.whatsappId === whatsappId)) {
             botAdmins.push({
                 phone: phone,
+                name: name || 'Admin',
                 whatsappId: whatsappId,
                 addedAt: new Date().toISOString()
             });
             await fs.writeFile(botAdminsPath, JSON.stringify(botAdmins, null, 2));
+            console.log(`[ADMIN-ADD] ✅ Saved to config/admins.json - WhatsApp ID: ${whatsappId}`);
         }
 
         // Log the action
@@ -1021,8 +1070,10 @@ app.post('/api/whatsapp-admins/add', async (req, res) => {
         await fs.writeFile(logsPath, existingLogs + logEntry + '\n');
 
         io.emit('whatsappAdminsUpdated', admins);
+        console.log(`[ADMIN-ADD] ✅ Admin added successfully: ${name} (${phone})`);
         res.json({ success: true, message: 'Admin added successfully' });
     } catch (error) {
+        console.error(`[ADMIN-ADD] ❌ Error:`, error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -2058,6 +2109,71 @@ app.post('/api/commands/delete', async (req, res) => {
         await writeJSON(commandsPath, commands);
         io.emit('commandDeleted', { index, type });
         res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 📸 Get admin profile picture
+app.get('/api/admin/profile-pic/:whatsappId', async (req, res) => {
+    try {
+        const whatsappId = req.params.whatsappId;
+        const fileName = `${whatsappId.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+        const picPath = path.join(profilePicDir, fileName);
+        
+        try {
+            const base64Image = await fs.readFile(picPath, 'utf8');
+            res.json({ 
+                success: true, 
+                image: base64Image,
+                dataUrl: `data:image/jpeg;base64,${base64Image}`
+            });
+        } catch (err) {
+            // Picture not found or error reading
+            res.status(404).json({ 
+                success: false, 
+                message: 'Profile picture not found',
+                image: null 
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get all bot messages
+app.get('/api/messages', async (req, res) => {
+    try {
+        const messagesPath = path.join(__dirname, '../config/messages.json');
+        const messages = await readJSON(messagesPath);
+        res.json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update bot message
+app.post('/api/messages/:category/:key', async (req, res) => {
+    try {
+        const { category, key } = req.params;
+        const { value } = req.body;
+        
+        if (!category || !key || !value) {
+            return res.status(400).json({ success: false, error: 'Category, key, and value required' });
+        }
+        
+        const messagesPath = path.join(__dirname, '../config/messages.json');
+        let messages = await readJSON(messagesPath);
+        
+        if (!messages[category]) {
+            return res.status(400).json({ success: false, error: 'Invalid category' });
+        }
+        
+        messages[category][key] = value;
+        await writeJSON(messagesPath, messages);
+        
+        io.emit('messagesUpdated', { category, key, value });
+        res.json({ success: true, message: 'Message updated successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

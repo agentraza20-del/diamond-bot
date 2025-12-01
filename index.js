@@ -19,8 +19,11 @@ const { delay, replyWithDelay, sendMessageWithDelay, messageCounter } = require(
 // 🔍 Admin Matcher - Handle different WhatsApp ID formats
 const { isAdminByAnyVariant, getAdminInfo } = require('./utils/admin-matcher');
 
-// 🤖 Auto Admin Registration
-const { autoRegisterAdmin, checkAndAutoRegisterAdmin, isAdminBlocked } = require('./utils/auto-admin-register');
+// 🤖 Auto Admin Registration - DISABLED (only manual admin panel registration allowed)
+// const { autoRegisterAdmin, checkAndAutoRegisterAdmin } = require('./utils/auto-admin-register');
+
+// 📸 Profile Picture Handler
+const { fetchAdminProfilePictures, captureProfilePictureFromMessage } = require('./utils/profile-picture');
 
 // Connect to Admin Panel Socket.IO server
 const adminSocket = io('http://localhost:3000');
@@ -97,6 +100,15 @@ client.on('ready', () => {
     currentQRCode = null; // Clear QR code when connected
     console.log('✅ WhatsApp Bot Ready!');
     console.log('🤖 Bot is now listening for messages...\n');
+    
+    // 📸 Fetch admin profile pictures
+    const admins = db.getAdmins();
+    if (admins && admins.length > 0) {
+        console.log('[PROFILE-PIC] 📸 Fetching admin profile pictures...');
+        fetchAdminProfilePictures(client, admins).catch(err => {
+            console.error('[PROFILE-PIC] Error fetching profiles:', err.message);
+        });
+    }
     
     // Start periodic check for deleted messages (every 15 seconds)
     startDeletedMessageChecker(client);
@@ -202,7 +214,10 @@ client.on('message', async (msg) => {
                 const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
                 const paymentConfig = JSON.parse(paymentNumberData);
                 
-                if (!paymentConfig.paymentNumbers || paymentConfig.paymentNumbers.length === 0) {
+                // Filter only enabled payment numbers
+                const enabledPayments = paymentConfig.paymentNumbers.filter(p => p.enabled !== false);
+                
+                if (!enabledPayments || enabledPayments.length === 0) {
                     await msg.reply('❌ পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
                     return;
                 }
@@ -211,7 +226,7 @@ client.on('message', async (msg) => {
                 
                 // Group by method
                 const methodGroups = {};
-                paymentConfig.paymentNumbers.forEach(payment => {
+                enabledPayments.forEach(payment => {
                     if (!methodGroups[payment.method]) {
                         methodGroups[payment.method] = [];
                     }
@@ -296,52 +311,58 @@ client.on('message', async (msg) => {
                     
                     const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
                     
-                    // Find matching payment numbers for this method
-                    const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
-                        p.method.toLowerCase() === matchedMethod.toLowerCase()
-                    );
-                    
-                    if (matchedNumbers.length === 0) {
-                        await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
-                        messageCounter.incrementCounter();
-                        return;
-                    }
-                    
-                    let numbersText = '';
-                    
-                    // Format each matched payment number
-                    matchedNumbers.forEach((payment, index) => {
-                        if (payment.isBank) {
-                            numbersText += `🏦 *${payment.method}*\n`;
-                            numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
-                            numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
-                            numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
-                            numbersText += `📋 ধরন: ${payment.type}\n`;
-                            if (index < matchedNumbers.length - 1) numbersText += '\n';
-                        } else {
-                            numbersText += `📱 *${payment.method}* (${payment.type})\n`;
-                            numbersText += `📞 ${payment.number}\n`;
-                            if (index < matchedNumbers.length - 1) numbersText += '\n';
+                    // Check if method is actually enabled
+                    if (!methodConfig.enabled) {
+                        console.log(`[PAYMENT-INFO] Method ${matchedMethod} is disabled, ignoring keyword`);
+                        // Don't send any response, let other handlers process this
+                    } else {
+                        // Find matching payment numbers for this method - filter only enabled ones
+                        const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
+                            p.method.toLowerCase() === matchedMethod.toLowerCase() && p.enabled !== false
+                        );
+                        
+                        if (matchedNumbers.length === 0) {
+                            await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
+                            messageCounter.incrementCounter();
+                            return;
                         }
-                    });
-                    
-                    // Use custom response template from payment-keywords config
-                    let responseMessage = methodConfig.response || '';
-                    
-                    // Replace placeholder if exists
-                    responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
-                    
-                    // If response doesn't have placeholder, append numbers at end
-                    if (!methodConfig.response.includes('{paymentNumbers}')) {
-                        responseMessage = responseMessage + '\n\n' + numbersText;
+                        
+                        let numbersText = '';
+                        
+                        // Format each matched payment number
+                        matchedNumbers.forEach((payment, index) => {
+                            if (payment.isBank) {
+                                numbersText += `🏦 *${payment.method}*\n`;
+                                numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
+                                numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
+                                numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
+                                numbersText += `📋 ধরন: ${payment.type}\n`;
+                                if (index < matchedNumbers.length - 1) numbersText += '\n';
+                            } else {
+                                numbersText += `📱 *${payment.method}* (${payment.type})\n`;
+                                numbersText += `📞 ${payment.number}\n`;
+                                if (index < matchedNumbers.length - 1) numbersText += '\n';
+                            }
+                        });
+                        
+                        // Use custom response template from payment-keywords config
+                        let responseMessage = methodConfig.response || '';
+                        
+                        // Replace placeholder if exists
+                        responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
+                        
+                        // If response doesn't have placeholder, append numbers at end
+                        if (!methodConfig.response.includes('{paymentNumbers}')) {
+                            responseMessage = responseMessage + '\n\n' + numbersText;
+                        }
+                        
+                        // Add footer with instructions
+                        responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
+                        
+                        await replyWithDelay(msg, responseMessage);
+                        messageCounter.incrementCounter();
+                        console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
                     }
-                    
-                    // Add footer with instructions
-                    responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
-                    
-                    await replyWithDelay(msg, responseMessage);
-                    messageCounter.incrementCounter();
-                    console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
                 } catch (error) {
                     console.error('[PAYMENT-INFO ERROR]', error);
                     await replyWithDelay(msg, '❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
@@ -511,19 +532,6 @@ client.on('message', async (msg) => {
         // Admin approval: done, ok, do, dn, yes, অক, okey, ওকে (for diamond orders)
         const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
         if (approvalKeywords.includes(msg.body.toLowerCase().trim()) && isGroup) {
-            // 🚫 Check if admin is blocked (removed)
-            const adminIdToCheck = msg.author || fromUserId;
-            if (isAdminBlocked(adminIdToCheck)) {
-                console.log(`[APPROVAL DEBUG] ❌ BLOCKED ADMIN attempting approval: ${adminIdToCheck}`);
-                await replyWithDelay(msg, '❌ This admin account has been removed and cannot approve orders.');
-                messageCounter.incrementCounter();
-                return;
-            }
-            
-            // 🤖 Auto-register new admins when they send approval commands
-            const userName = msg._data?.notifyName || msg.author || fromUserId;
-            autoRegisterAdmin(msg.author || fromUserId, userName);
-            
             // 🔍 Better admin check - try multiple ID formats
             let isAdminForApproval = isAdminUser;
             
@@ -545,11 +553,12 @@ client.on('message', async (msg) => {
             console.log(`[APPROVAL DEBUG] isAdminUser: ${isAdminUser}, isAdminForApproval: ${isAdminForApproval}`);
             if (adminInfo) console.log(`[APPROVAL DEBUG] Admin info: ${adminInfo.name} (${adminInfo.phone})`);
             
-            if (!isAdminForApproval) {
-                await replyWithDelay(msg, '❌ Only admins can approve orders.');
-                messageCounter.incrementCounter();
-                return;
-            }
+            // Allow anyone to approve orders (admin check removed)
+            // if (!isAdminForApproval) {
+            //     await replyWithDelay(msg, '❌ Only admins can approve orders.');
+            //     messageCounter.incrementCounter();
+            //     return;
+            // }
             if (!msg.hasQuotedMsg) {
                 await replyWithDelay(msg, '❌ Please reply to a user order to approve it.');
                 messageCounter.incrementCounter();

@@ -1,0 +1,23 @@
+{
+  "approval": {
+    "title": "Order Approval Messages",
+    "approved": "✅ Order approved!\n\n💎 Diamonds: {diamonds}💎\n💰 Amount: ৳{amount}\n👤 User: {userName}\n\n✓ Processing...",
+    "alreadyApproved": "⚠️ This order has already been approved by another admin.\n\n💎 Diamonds: {diamonds}💎\n📊 Status: {status}\n✓ Already handled",
+    "noPending": "❌ No pending diamond order found for this user.",
+    "notAdmin": "❌ Only admins can approve orders.",
+    "noQuoted": "❌ Please reply to a user order to approve it."
+  },
+  "payment": {
+    "title": "Payment & Deposit Messages",
+    "screenshotReceived": "✅ Payment screenshot received!\n\n⏳ Admin will verify your payment soon.\n\nThank you for your patience! 😊",
+    "notAdmin": "❌ Only admins can process payments/deposits.",
+    "noQuoted": "❌ Please reply to a user message to process payment/deposit.",
+    "infoNotFound": "❌ Payment information not found. Please contact admin."
+  },
+  "general": {
+    "title": "General Messages",
+    "offMessage": "❌ Bot is currently OFF. Please try again later.",
+    "errorDashboard": "❌ Error loading dashboard. Please try again.",
+    "cancelOnlyGroups": "❌ Cancel command only works in groups."
+  }
+}

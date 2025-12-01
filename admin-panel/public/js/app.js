@@ -1601,7 +1601,7 @@ function showUsersModal() {
                                             ${users.map(u => `
                                                 <tr>
                                                     <td data-label="Phone"><span class="phone-number">${u.phone}</span></td>
-                                                    <td data-label="Name">${u.name || 'N/A'}</td>
+                                                    <td data-label="Name"><strong>${u.name || u.whatsappName || 'Unknown'}</strong></td>
                                                     <td data-label="Main Balance"><span class="badge-balance">৳${(u.balance || 0).toLocaleString()}</span></td>
                                                     <td data-label="Due Balance"><span class="badge-due">৳${(u.dueBalance || 0).toLocaleString()}</span></td>
                                                     <td data-label="Status"><span class="status-badge status-${u.status}">${u.status}</span></td>
@@ -1748,16 +1748,20 @@ function showPaymentNumbersModal() {
                             
                             <div style="display: grid; gap: 20px;">
                                 ${data.paymentNumbers && data.paymentNumbers.length > 0 ? data.paymentNumbers.map((payment, idx) => `
-                                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border-left: 4px solid #667eea;">
+                                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border-left: 4px solid ${payment.enabled ? '#25d366' : '#888'}; opacity: ${payment.enabled ? '1' : '0.6'};">
                                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
                                             <div>
                                                 <h4 style="margin: 0 0 5px 0; color: #4facfe;">${payment.method}</h4>
                                                 <p style="margin: 0; color: #aaa; font-size: 0.9rem;">
                                                     ${payment.isBank ? `<strong>Bank Account</strong>` : '<strong>Mobile Payment</strong>'}
+                                                    <span style="margin-left: 10px; ${payment.enabled ? 'color: #25d366;' : 'color: #f5576c;'}">${payment.enabled ? '✓ ACTIVE' : '✗ INACTIVE'}</span>
                                                 </p>
                                             </div>
                                             <div style="display: flex; gap: 8px;">
-                                                <button onclick="deletePaymentNumber(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                <button onclick="togglePaymentStatus(${idx})" style="padding: 6px 12px; background: ${payment.enabled ? '#f5576c' : '#25d366'}; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                    <i class="fas fa-${payment.enabled ? 'toggle-on' : 'toggle-off'}"></i> ${payment.enabled ? 'Turn Off' : 'Turn On'}
+                                                </button>
+                                                <button onclick="deletePaymentNumber(${idx})" style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
                                                     <i class="fas fa-trash"></i> Delete
                                                 </button>
                                             </div>
@@ -1931,6 +1935,22 @@ function savePaymentNumber() {
     .catch(err => alert('Error: ' + err.message));
 }
 
+function togglePaymentStatus(idx) {
+    fetch(`/api/payment-numbers/toggle/${idx}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showPaymentNumbersModal();
+            } else {
+                alert('Error updating payment status');
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            alert('Failed to update payment status');
+        });
+}
+
 function deletePaymentNumber(idx) {
     if (confirm('Are you sure you want to delete this payment number?')) {
         fetch(`/api/payment-numbers/delete/${idx}`, { method: 'DELETE' })
@@ -1946,98 +1966,75 @@ function deletePaymentNumber(idx) {
 }
 
 function showWhatsAppAdminModal() {
-    // Fetch both active admins and blocked admins
-    Promise.all([
-        fetch('/api/whatsapp-admins').then(res => res.json()),
-        fetch('/api/blocked-admins').then(res => res.json()).catch(() => ({ blockedAdmins: [] }))
-    ])
-    .then(([data, blockedData]) => {
+    // Fetch only active admins - simple and fast
+    fetch('/api/whatsapp-admins').then(res => res.json())
+    .then(data => {
         const admins = data.whatsappAdmins || [];
-        const blocked = blockedData.blockedAdmins || [];
-        
-        // Create a map of blocked phone numbers for quick lookup
-        const blockedPhones = new Set(blocked.map(b => b.phone));
         
         const modal = `
             <div class="modal" onclick="closeModal(event)">
-                <div class="modal-content large-modal" onclick="event.stopPropagation()" style="max-height: 90vh; overflow-y: auto;">
+                <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
                     <div class="modal-header">
-                        <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins Management</h2>
+                        <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins (${admins.length})</h2>
                         <button class="modal-close" onclick="closeModal()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        <!-- Active Admins Section -->
-                        <div style="margin-bottom: 30px;">
-                            <h3 style="color: #25d366; margin-bottom: 15px;"><i class="fas fa-check-circle"></i> Active Admins (${admins.filter(a => !blockedPhones.has(a.phone)).length})</h3>
-                            <div style="margin-bottom: 20px;">
-                                <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600;">
-                                    <i class="fas fa-plus"></i> Add New Admin
-                                </button>
-                            </div>
-                            
-                            <div style="display: grid; gap: 15px;">
-                                ${admins && admins.length > 0 ? admins.filter(a => !blockedPhones.has(a.phone)).map((admin, idx) => `
-                                    <div style="background: rgba(37, 211, 102, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #25d366;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <div>
-                                                <div style="font-size: 1.1rem; font-weight: 600; color: #25d366;">
-                                                    <i class="fas fa-phone"></i> ${admin.phone}
-                                                </div>
-                                                <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.9rem;">
-                                                    Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}
-                                                </p>
-                                            </div>
-                                            <div style="display: flex; gap: 8px;">
-                                                <button onclick="blockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #ffc107; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                    <i class="fas fa-ban"></i> Block
-                                                </button>
-                                                <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                    <i class="fas fa-trash"></i> Remove
-                                                </button>
-                                            </div>
+                        <div style="margin-bottom: 20px;">
+                            <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600; width: 100%;">
+                                <i class="fas fa-plus"></i> Add New Admin
+                            </button>
+                        </div>
+                        
+                        <div style="display: grid; gap: 12px; max-height: 400px; overflow-y: auto;">
+                            ${admins && admins.length > 0 ? admins.map((admin, idx) => `
+                                <div style="background: rgba(37, 211, 102, 0.1); padding: 12px; border-radius: 8px; border-left: 3px solid #25d366; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                                        <div style="width: 48px; height: 48px; border-radius: 50%; background: #2d3561; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;" class="admin-profile-pic" data-phone="${admin.phone}">
+                                            <i class="fas fa-user" style="color: #25d366; font-size: 24px;"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; color: #25d366; font-size: 1.1rem;">${admin.name || 'Admin'}</div>
+                                            <div style="font-weight: 600; color: #888;">📱 ${admin.phone}</div>
+                                            <p style="margin: 3px 0 0 0; color: #aaa; font-size: 0.85rem;">Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}</p>
                                         </div>
                                     </div>
-                                `).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No active admins</p>'}
-                            </div>
-                        </div>
-
-                        <!-- Blocked Admins Section -->
-                        ${blocked && blocked.length > 0 ? `
-                            <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #2d3561;">
-                                <h3 style="color: #f5576c; margin-bottom: 15px;"><i class="fas fa-lock"></i> Blocked Admins (${blocked.length})</h3>
-                                <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9rem;">These admins cannot approve orders. Click Unblock to restore access.</p>
-                                <div style="display: grid; gap: 15px;">
-                                    ${blocked.map((admin, idx) => `
-                                        <div style="background: rgba(245, 87, 108, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #f5576c;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <div style="flex: 1;">
-                                                    <div style="font-size: 1.1rem; font-weight: 600; color: #f5576c;">
-                                                        <i class="fas fa-lock"></i> ${admin.phone}
-                                                    </div>
-                                                    <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.9rem;">
-                                                        Blocked: ${new Date(admin.blockedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})} | Reason: ${admin.reason || 'N/A'}
-                                                    </p>
-                                                    <p style="margin: 5px 0 0 0; color: #999; font-size: 0.85rem;">
-                                                        ID: ${admin.whatsappId}
-                                                    </p>
-                                                </div>
-                                                <button onclick="unblockWhatsAppAdmin('${admin.phone}')" style="padding: 6px 12px; background: #25d366; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                    <i class="fas fa-unlock"></i> Unblock
-                                                </button>
-                                            </div>
-                                        </div>
-                                    `).join('')}
+                                    <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 5px 10px; background: #f5576c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; flex-shrink: 0;">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
                                 </div>
-                            </div>
-                        ` : ''}
+                            `).join('') : '<p style="color: #aaa; text-align: center; padding: 30px;">No admins yet</p>'}
+                        </div>
                     </div>
                 </div>
             </div>
         `;
         document.getElementById('modalContainer').innerHTML = modal;
+        
+        // Load profile pictures after modal is rendered
+        loadAdminProfilePictures();
     })
     .catch(err => {
         alert('Error loading WhatsApp admins: ' + err.message);
+    });
+}
+
+// Load profile pictures for all admins
+function loadAdminProfilePictures() {
+    const profilePics = document.querySelectorAll('.admin-profile-pic');
+    profilePics.forEach((pic) => {
+        const phone = pic.getAttribute('data-phone');
+        const whatsappId = phone + '@c.us';
+        
+        fetch('/api/admin/profile-pic/' + encodeURIComponent(whatsappId))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.dataUrl) {
+                    pic.innerHTML = `<img src="${data.dataUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                }
+            })
+            .catch(err => {
+                // Keep default icon - picture not available
+            });
     });
 }
 
@@ -2050,6 +2047,11 @@ function showAddWhatsAppAdminModal() {
                     <button class="modal-close" onclick="closeModal()">&times;</button>
                 </div>
                 <div class="modal-body">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Admin Name:</label>
+                        <input type="text" id="adminName" placeholder="e.g., RUBEL, Ahmed, etc." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                    </div>
+
                     <div style="margin-bottom: 15px;">
                         <label style="display: block; margin-bottom: 8px; font-weight: 600;">Country Code:</label>
                         <select id="countryCode" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
@@ -2100,8 +2102,14 @@ function showAddWhatsAppAdminModal() {
 }
 
 function saveWhatsAppAdmin() {
+    const adminName = document.getElementById('adminName').value.trim();
     const countryCode = document.getElementById('countryCode').value.trim();
     const phoneNumber = document.getElementById('adminPhone').value.trim();
+    
+    if (!adminName) {
+        alert('Please enter admin name');
+        return;
+    }
     
     if (!phoneNumber) {
         alert('Please enter a phone number');
@@ -2117,7 +2125,7 @@ function saveWhatsAppAdmin() {
     fetch('/api/whatsapp-admins/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: fullPhone })
+        body: JSON.stringify({ phone: fullPhone, name: adminName })
     })
     .then(res => res.json())
     .then(data => {
@@ -3899,16 +3907,103 @@ async function deletePaymentKeywordMethod(methodName) {
 }
 
 // Edit Message Settings Modal
-function showEditMessageModal() {
-    const modalHTML = `
-        <div id="editMessageModal" class="modal" onclick="if(event.target === this) closeModal()">
-            <div class="modal-content">
-                <h2><i class="fas fa-edit"></i> Edit Message Settings</h2>
-                <p style="color: #aaa; margin-top: 20px;">Edit message settings feature coming soon...</p>
-                <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+async function showEditMessageModal() {
+    try {
+        const response = await fetch('/api/messages');
+        const data = await response.json();
+        const messages = data.messages || {};
+        
+        let categoriesHTML = '';
+        for (const [category, msgs] of Object.entries(messages)) {
+            if (category === 'title') continue;
+            const title = msgs.title || category;
+            categoriesHTML += `
+                <div style="margin-bottom: 25px; padding: 15px; background: rgba(37, 211, 102, 0.05); border-radius: 8px; border-left: 3px solid #25d366;">
+                    <h4 style="color: #25d366; margin-bottom: 15px;">${title}</h4>
+            `;
+            
+            for (const [key, value] of Object.entries(msgs)) {
+                if (key === 'title') continue;
+                categoriesHTML += `
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 5px; color: #eee;">${key}:</label>
+                        <textarea 
+                            class="message-input" 
+                            data-category="${category}" 
+                            data-key="${key}" 
+                            style="width: 100%; padding: 10px; background: #16213e; border: 1px solid #2d3561; color: #eee; border-radius: 5px; font-family: monospace; min-height: 80px; resize: vertical;"
+                            placeholder="Enter message">${value}</textarea>
+                    </div>
+                `;
+            }
+            categoriesHTML += `</div>`;
+        }
+        
+        const modalHTML = `
+            <div id="editMessageModal" class="modal" onclick="if(event.target === this) closeModal()">
+                <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-edit"></i> Edit Bot Messages</h2>
+                        <button class="modal-close" onclick="closeModal()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        ${categoriesHTML}
+                    </div>
+                    <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button onclick="saveAllMessages()" style="flex: 1; padding: 12px; background: #25d366; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-save"></i> Save All Changes
+                        </button>
+                        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+                    </div>
+                </div>
             </div>
-        </div>
-    `;
-    document.getElementById('modalContainer').innerHTML = modalHTML;
-    document.getElementById('editMessageModal').style.display = 'flex';
+        `;
+        document.getElementById('modalContainer').innerHTML = modalHTML;
+        document.getElementById('editMessageModal').style.display = 'flex';
+    } catch (error) {
+        console.error('Error loading messages:', error);
+        alert('Failed to load messages');
+    }
+}
+
+// Save all modified messages
+async function saveAllMessages() {
+    const inputs = document.querySelectorAll('.message-input');
+    const updates = [];
+    
+    for (const input of inputs) {
+        const category = input.dataset.category;
+        const key = input.dataset.key;
+        const value = input.value;
+        updates.push({ category, key, value });
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const { category, key, value } of updates) {
+        try {
+            const response = await fetch(`/api/messages/${category}/${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value })
+            });
+            
+            if (response.ok) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            console.error('Error saving message:', error);
+            errorCount++;
+        }
+    }
+    
+    if (errorCount === 0) {
+        alert(`✅ All ${successCount} messages saved successfully!`);
+        closeModal();
+    } else {
+        alert(`⚠️ Saved ${successCount}, Failed ${errorCount}`);
+    }
 }

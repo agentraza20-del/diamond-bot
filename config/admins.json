@@ -1,23 +1,42 @@
 [
   {
     "phone": "8801721016186",
-    "whatsappId": "8801721016186@c.us",
-    "name": "Admin",
+    "whatsappId": "76210050711676@lid",
+    "name": "RUBEL",
     "role": "admin",
-    "addedAt": "2025-12-01T09:00:00.000Z"
+    "addedAt": "2025-12-01T11:18:15.903Z",
+    "autoAdded": true
   },
   {
-    "phone": "8801339842889",
-    "whatsappId": "8801339842889@c.us",
-    "name": "Admin 2",
+    "phone": "61468135926",
+    "whatsappId": "61468135926@c.us",
+    "name": "topup",
     "role": "admin",
-    "addedAt": "2025-11-27T15:30:52.185Z"
+    "addedAt": "2025-12-01T12:00:00.000Z",
+    "autoAdded": false
   },
   {
-    "phone": "8801611938365",
-    "whatsappId": "8801611938365@c.us",
-    "name": "Admin 3",
+    "phone": "8801611933865",
+    "whatsappId": "8801611933865@c.us",
+    "name": "ariyan",
     "role": "admin",
-    "addedAt": "2025-12-01T06:54:50.101Z"
+    "addedAt": "2025-12-01T12:00:00.000Z",
+    "autoAdded": false
   },
+  {
+    "phone": "8801616055111",
+    "whatsappId": "8801616055111@c.us",
+    "name": "milon",
+    "role": "admin",
+    "addedAt": "2025-12-01T12:00:00.000Z",
+    "autoAdded": false
+  },
+  {
+    "phone": "8801991100552",
+    "whatsappId": "8801991100552@c.us",
+    "name": "manager",
+    "role": "admin",
+    "addedAt": "2025-12-01T12:00:00.000Z",
+    "autoAdded": false
+  }
 ]

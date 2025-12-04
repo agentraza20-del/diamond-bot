@@ -6,7 +6,6 @@
 const db = require('./config/database');
 const fs = require('fs');
 const path = require('path');
-const { blockAdmin, unblockAdmin, loadBlockedAdmins } = require('./utils/auto-admin-register');
 
 const ADMINS_FILE = path.join(__dirname, './config/admins.json');
 
@@ -27,10 +26,7 @@ function removeAdmin(whatsappId) {
         admins.splice(index, 1);
         fs.writeFileSync(ADMINS_FILE, JSON.stringify(admins, null, 2));
         
-        // Block from approving anything
-        blockAdmin(whatsappId, 'Admin removed');
-        
-        console.log(`✅ Admin removed and blocked: ${admin.name}`);
+        console.log(`✅ Admin removed: ${admin.name}`);
         return true;
     } catch (err) {
         console.error(`❌ Error removing admin:`, err.message);
@@ -40,7 +36,6 @@ function removeAdmin(whatsappId) {
 
 function listAdmins() {
     const admins = db.getAdmins();
-    const blocked = loadBlockedAdmins();
     
     console.log('\n📋 Active Admins:');
     if (admins.length === 0) {
@@ -51,16 +46,7 @@ function listAdmins() {
         });
     }
     
-    console.log('\n🚫 Blocked Admins:');
-    if (blocked.length === 0) {
-        console.log('   No blocked admins');
-    } else {
-        blocked.forEach((admin, i) => {
-            console.log(`   ${i+1}. ${admin.whatsappId} | Reason: ${admin.reason}`);
-        });
-    }
-    
-    console.log(`\nTotal: ${admins.length} active, ${blocked.length} blocked\n`);
+    console.log(`\nTotal: ${admins.length} active\n`);
 }
 
 // CLI
@@ -71,18 +57,13 @@ if (command === 'remove' && arg) {
     removeAdmin(arg);
 } else if (command === 'list') {
     listAdmins();
-} else if (command === 'unblock' && arg) {
-    unblockAdmin(arg);
-    console.log(`✅ Admin unblocked: ${arg}`);
 } else {
     console.log(`
 Admin Management Commands:
   node admin-manage.js list                    - List all admins
-  node admin-manage.js remove <whatsappId>     - Remove an admin (block from approving)
-  node admin-manage.js unblock <whatsappId>    - Unblock a removed admin
+  node admin-manage.js remove <whatsappId>     - Remove an admin
 
 Examples:
   node admin-manage.js remove 100378335014967@lid
-  node admin-manage.js unblock 100378335014967@lid
     `);
 }

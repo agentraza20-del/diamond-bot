@@ -61,6 +61,7 @@ let expandedGroups = new Set(); // Track expanded groups
 let isInputFocused = false; // Track if user is typing
 let selectedGroups = new Set(); // Track selected checkboxes
 let groupsMarkedForDueReminder = new Set(); // Track groups marked for due reminders
+let processingTimeMinutes = parseInt(localStorage.getItem('processingTimeMinutes') || '2'); // Processing time in minutes (default 2)
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -127,11 +128,22 @@ function initSocketListeners() {
     });
 
     socket.on('dataUpdated', () => {
-        console.log('Data updated, refreshing silently...');
+        console.log('Data updated event received (refresh disabled for orders page)');
         playNotificationSound(); // Play sound when data is updated (new order)
-        if (!isInputFocused) {
-            silentRefreshData(); // Only refresh if user is not typing
-        }
+        
+        // Show background refresh indicator
+        showBgRefreshIndicator();
+        
+        // Perform silent refresh in background
+        silentRefreshData().then(() => {
+            // Hide indicator when done
+            hideBgRefreshIndicator();
+        }).catch(err => {
+            console.error('Silent refresh error:', err);
+            hideBgRefreshIndicator();
+        });
+        // DISABLED: silentRefreshData() - Removed to prevent page movement
+        // Only orderEvent listener will update the orders page
     });
 
     socket.on('groupRateUpdated', (data) => {
@@ -187,6 +199,61 @@ function initSocketListeners() {
         console.log('Auto-deductions cleared');
         loadLastAutoDeduction();
     });
+
+    // ⚡ REAL-TIME ORDER UPDATES - Advanced System
+    // NOTE: This is DEPRECATED - Use specific orderStatusUpdated, newOrderCreated, orderDeleted events instead
+    socket.on('orderEvent', (data) => {
+        console.log(`[ORDER EVENT - DEPRECATED] 🔔 Received:`, data);
+        // Don't refresh - let specific event handlers take over
+        // Just show notification if provided
+        if (data.message) {
+            showToast(data.message, 'info');
+            console.log(`[ORDER EVENT] 📢 ${data.message}`);
+        }
+    });
+
+    // 🔄 REAL-TIME ORDER STATUS UPDATE - Direct socket event
+    socket.on('orderStatusUpdated', (data) => {
+        console.log(`[REAL-TIME UPDATE] 🔄 Order status changed:`, data);
+        if (data.orderId && data.status) {
+            // Instantly update the order in memory and UI without full page refresh
+            updateOrderStatusRealTime(data.orderId, data.status, data);
+            
+            // Show subtle notification
+            if (data.message) {
+                showToast(data.message, 'info');
+            }
+        }
+    });
+
+    // 📊 NEW ORDER CREATED - Real-time add to table
+    socket.on('newOrderCreated', (data) => {
+        console.log(`[NEW ORDER] ✨ New order created:`, data);
+        if (data.order) {
+            addNewOrderToTable(data.order);
+            playNotificationSound();
+            showToast(`🎯 New order from ${data.order.phone}`, 'success');
+        }
+    });
+
+    // 🗑️ ORDER DELETED - Real-time removal from table
+    socket.on('orderDeleted', (data) => {
+        console.log(`[DELETE ORDER] 🗑️ Order deleted:`, data);
+        if (data.orderId) {
+            removeOrderFromTable(data.orderId);
+            showToast(data.message || 'Order deleted', 'warning');
+        }
+    });
+
+    // ✅ ORDER APPROVED - Real-time status change with highlight
+    socket.on('orderApproved', (data) => {
+        console.log(`[APPROVE ORDER] ✅ Order approved:`, data);
+        if (data.orderId) {
+            updateOrderStatusRealTime(data.orderId, 'approved', data);
+            highlightOrderRow(data.orderId, 'success');
+            showToast(data.message || 'Order approved', 'success');
+        }
+    });
 }
 
 // View Navigation
@@ -216,7 +283,7 @@ function showView(viewId) {
         loadTransactions();
         loadOrders();
     } else if (viewId === 'ordersView') {
-        loadOrdersNew();
+        enableOrdersPolling(); // Start real-time polling
     }
 }
 
@@ -242,8 +309,19 @@ async function refreshData() {
 }
 
 // Silent Refresh (no toast notification)
+// DISABLED for Orders page - only Socket.io events trigger updates
 async function silentRefreshData() {
     try {
+        // Check if we're on Orders page - skip refresh if so
+        const ordersView = document.getElementById('ordersView');
+        const isOrdersPageActive = ordersView && ordersView.classList.contains('active');
+        
+        // Don't refresh if on Orders page (it uses Socket.io events only)
+        if (isOrdersPageActive) {
+            console.log('[SILENT REFRESH] Orders page active - skipping auto refresh');
+            return;
+        }
+        
         await Promise.all([
             loadStats(),
             loadGroups(),
@@ -1209,6 +1287,65 @@ async function loadOrders() {
 // Load Orders for New Orders View with Pagination
 let currentOrderPage = 1;
 const ordersPerPage = 20;
+let processingTimers = {}; // Track timers for each processing order
+
+// Start countdown timer update every second
+function startProcessingCountdown() {
+    setInterval(() => {
+        // Find all processing order badges and update their timers
+        document.querySelectorAll('[data-order-id][data-start-time]').forEach(element => {
+            const orderId = element.getAttribute('data-order-id');
+            const startTime = parseInt(element.getAttribute('data-start-time'));
+            const elapsedMs = Date.now() - startTime;
+            const remainingMs = (2 * 60 * 1000) - elapsedMs; // 2 minutes = 120000 ms
+            
+            if (remainingMs > 0) {
+                const totalSeconds = Math.ceil(remainingMs / 1000);
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                element.textContent = `⏳ ${timeDisplay}`;
+            } else {
+                element.textContent = '⏳ 0:00';
+            }
+        });
+    }, 1000); // Update every second
+}
+
+// Initialize countdown when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    startProcessingCountdown();
+});
+
+// Real-time polling system - refreshes orders every 3 seconds
+let ordersPollingInterval = null;
+let isOrdersViewActive = false;
+
+function startOrdersPolling() {
+    if (ordersPollingInterval) return; // Already polling
+    
+    console.log('[ORDERS POLLING] Started - updating every 3 seconds');
+    isOrdersViewActive = true;
+    
+    // Initial load
+    loadOrdersNew();
+    
+    // Refresh every 3 seconds while Orders view is active
+    ordersPollingInterval = setInterval(() => {
+        if (isOrdersViewActive) {
+            silentRefreshOrders();
+        }
+    }, 3000);
+}
+
+function stopOrdersPolling() {
+    if (ordersPollingInterval) {
+        clearInterval(ordersPollingInterval);
+        ordersPollingInterval = null;
+        isOrdersViewActive = false;
+        console.log('[ORDERS POLLING] Stopped');
+    }
+}
 
 async function loadOrdersNew() {
     try {
@@ -1233,6 +1370,56 @@ async function loadOrdersNew() {
     }
 }
 
+// Silent background refresh - ENABLED for polling
+// This function refreshes orders silently without page reload
+async function silentRefreshOrders() {
+    try {
+        // Save current scroll position
+        const bodyScrollY = window.scrollY || document.documentElement.scrollTop;
+        const mainContent = document.querySelector('.main-content');
+        const mainScrollY = mainContent ? mainContent.scrollTop : 0;
+        
+        const response = await fetch('/api/orders');
+        const newOrders = await response.json();
+        
+        // Only update if data has changed
+        if (JSON.stringify(newOrders) !== JSON.stringify(allOrders)) {
+            allOrders = newOrders;
+            console.log('[SILENT REFRESH] Orders updated, rerendering table');
+            
+            // Update the current page display silently (NO page reload)
+            displayOrdersPage(currentOrderPage);
+            
+            // Restore scroll position after DOM update completes
+            // Use requestAnimationFrame twice to ensure all repaints are complete
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // Restore main body scroll
+                    if (bodyScrollY > 0) {
+                        window.scrollTo({top: bodyScrollY, left: 0, behavior: 'auto'});
+                    }
+                    // Restore main content scroll
+                    if (mainContent && mainScrollY > 0) {
+                        mainContent.scrollTop = mainScrollY;
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        console.log('[SILENT REFRESH] Error:', error.message);
+    }
+}
+
+// Auto enable polling when Orders page is viewed
+function enableOrdersPolling() {
+    startOrdersPolling();
+}
+
+// Auto disable polling when Orders page is hidden
+function disableOrdersPolling() {
+    stopOrdersPolling();
+}
+
 // Display orders for a specific page
 function displayOrdersPage(page) {
     const tbody = document.getElementById('ordersTableNew');
@@ -1250,13 +1437,53 @@ function displayOrdersPage(page) {
         const date = new Date(o.date);
         const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
         
+        // Create status display with processing info and real-time countdown
+        let statusDisplay = '';
+        if (o.status === 'processing') {
+            // Calculate remaining time from approval time (processingStartedAt - when admin said "Done")
+            // Use processingStartedAt if available, otherwise fall back to order date
+            const approvalTime = o.processingStartedAt ? new Date(o.processingStartedAt) : new Date(o.date);
+            const elapsedMs = Date.now() - approvalTime;
+            const remainingMs = (2 * 60 * 1000) - elapsedMs; // 2 minutes = 120000 ms
+            
+            const totalSeconds = Math.ceil(Math.max(0, remainingMs) / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            statusDisplay = `<span class="status-badge status-${o.status}" 
+                                data-order-id="${o.id}" 
+                                data-start-time="${approvalTime.getTime()}"
+                                title="⏳ Processing - Auto-approves in 2 minutes. Delete message to cancel.">⏳ ${timeDisplay}</span>`;
+        } else {
+            // Handle different statuses with icons and proper formatting
+            let statusText = o.status;
+            let statusIcon = '';
+            
+            if (o.status === 'deleted') {
+                statusText = 'DELETED';
+                statusIcon = '🗑️';
+            } else if (o.status === 'approved') {
+                statusText = 'APPROVED';
+                statusIcon = '✅';
+            } else if (o.status === 'pending') {
+                statusText = 'PENDING';
+                statusIcon = '⏳';
+            } else if (o.status === 'cancelled') {
+                statusText = 'CANCELLED';
+                statusIcon = '❌';
+            }
+            
+            statusDisplay = `<span class="status-badge status-${o.status}">${statusIcon} ${statusText}</span>`;
+        }
+        
         return `
             <tr>
                 <td data-label="Phone">${o.phone}</td>
                 <td data-label="ID/Number">${o.playerId}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
-                <td data-label="Status"><span class="status-badge status-${o.status}">${o.status}</span></td>
+                <td data-label="Status">${statusDisplay}</td>
                 <td data-label="Date">${formattedDate}</td>
             </tr>
         `;
@@ -1328,6 +1555,34 @@ function goToOrdersPage(page) {
     
     // Scroll to top of table
     document.getElementById('ordersTableNew').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Instantly update order row status when event received
+function updateOrderRowStatus(orderId, newStatus) {
+    try {
+        console.log(`[UPDATE ROW] Attempting to update order ${orderId} to status: ${newStatus}`);
+        
+        // Find the order in the allOrders array
+        const orderIndex = allOrders.findIndex(o => o.id == orderId);
+        if (orderIndex === -1) {
+            console.log(`[UPDATE ROW] Order ${orderId} not found in allOrders, will reload data`);
+            // Force refresh if order not found
+            loadOrdersNew();
+            return;
+        }
+        
+        // Update the order in memory
+        allOrders[orderIndex].status = newStatus;
+        console.log(`[UPDATE ROW] ✅ Updated order in memory: ${orderId} → ${newStatus}`);
+        
+        // Completely re-render the orders table to ensure proper display
+        // This ensures all status badges, timers, and formatting are correct
+        loadOrdersNew();
+        console.log(`[UPDATE ROW] ✅ Reloaded orders table for instant display`);
+        
+    } catch (error) {
+        console.error(`[UPDATE ROW] Error updating row:`, error);
+    }
 }
 
 // Helper function for paginating filtered results
@@ -1601,7 +1856,7 @@ function showUsersModal() {
                                             ${users.map(u => `
                                                 <tr>
                                                     <td data-label="Phone"><span class="phone-number">${u.phone}</span></td>
-                                                    <td data-label="Name"><strong>${u.name || u.whatsappName || 'Unknown'}</strong></td>
+                                                    <td data-label="Name">${u.name || 'N/A'}</td>
                                                     <td data-label="Main Balance"><span class="badge-balance">৳${(u.balance || 0).toLocaleString()}</span></td>
                                                     <td data-label="Due Balance"><span class="badge-due">৳${(u.dueBalance || 0).toLocaleString()}</span></td>
                                                     <td data-label="Status"><span class="status-badge status-${u.status}">${u.status}</span></td>
@@ -1748,20 +2003,16 @@ function showPaymentNumbersModal() {
                             
                             <div style="display: grid; gap: 20px;">
                                 ${data.paymentNumbers && data.paymentNumbers.length > 0 ? data.paymentNumbers.map((payment, idx) => `
-                                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border-left: 4px solid ${payment.enabled ? '#25d366' : '#888'}; opacity: ${payment.enabled ? '1' : '0.6'};">
+                                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border-left: 4px solid #667eea;">
                                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
                                             <div>
                                                 <h4 style="margin: 0 0 5px 0; color: #4facfe;">${payment.method}</h4>
                                                 <p style="margin: 0; color: #aaa; font-size: 0.9rem;">
                                                     ${payment.isBank ? `<strong>Bank Account</strong>` : '<strong>Mobile Payment</strong>'}
-                                                    <span style="margin-left: 10px; ${payment.enabled ? 'color: #25d366;' : 'color: #f5576c;'}">${payment.enabled ? '✓ ACTIVE' : '✗ INACTIVE'}</span>
                                                 </p>
                                             </div>
                                             <div style="display: flex; gap: 8px;">
-                                                <button onclick="togglePaymentStatus(${idx})" style="padding: 6px 12px; background: ${payment.enabled ? '#f5576c' : '#25d366'}; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                                                    <i class="fas fa-${payment.enabled ? 'toggle-on' : 'toggle-off'}"></i> ${payment.enabled ? 'Turn Off' : 'Turn On'}
-                                                </button>
-                                                <button onclick="deletePaymentNumber(${idx})" style="padding: 6px 12px; background: #888; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                <button onclick="deletePaymentNumber(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
                                                     <i class="fas fa-trash"></i> Delete
                                                 </button>
                                             </div>
@@ -1935,22 +2186,6 @@ function savePaymentNumber() {
     .catch(err => alert('Error: ' + err.message));
 }
 
-function togglePaymentStatus(idx) {
-    fetch(`/api/payment-numbers/toggle/${idx}`, { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                showPaymentNumbersModal();
-            } else {
-                alert('Error updating payment status');
-            }
-        })
-        .catch(err => {
-            console.error('Error:', err);
-            alert('Failed to update payment status');
-        });
-}
-
 function deletePaymentNumber(idx) {
     if (confirm('Are you sure you want to delete this payment number?')) {
         fetch(`/api/payment-numbers/delete/${idx}`, { method: 'DELETE' })
@@ -1987,18 +2222,12 @@ function showWhatsAppAdminModal() {
                         
                         <div style="display: grid; gap: 12px; max-height: 400px; overflow-y: auto;">
                             ${admins && admins.length > 0 ? admins.map((admin, idx) => `
-                                <div style="background: rgba(37, 211, 102, 0.1); padding: 12px; border-radius: 8px; border-left: 3px solid #25d366; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                                    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                                        <div style="width: 48px; height: 48px; border-radius: 50%; background: #2d3561; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;" class="admin-profile-pic" data-phone="${admin.phone}">
-                                            <i class="fas fa-user" style="color: #25d366; font-size: 24px;"></i>
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 700; color: #25d366; font-size: 1.1rem;">${admin.name || 'Admin'}</div>
-                                            <div style="font-weight: 600; color: #888;">📱 ${admin.phone}</div>
-                                            <p style="margin: 3px 0 0 0; color: #aaa; font-size: 0.85rem;">Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}</p>
-                                        </div>
+                                <div style="background: rgba(37, 211, 102, 0.1); padding: 12px; border-radius: 8px; border-left: 3px solid #25d366; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 600; color: #25d366;">📱 ${admin.phone}</div>
+                                        <p style="margin: 3px 0 0 0; color: #aaa; font-size: 0.85rem;">Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}</p>
                                     </div>
-                                    <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 5px 10px; background: #f5576c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; flex-shrink: 0;">
+                                    <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 5px 10px; background: #f5576c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">
                                         <i class="fas fa-trash"></i> Remove
                                     </button>
                                 </div>
@@ -2009,32 +2238,9 @@ function showWhatsAppAdminModal() {
             </div>
         `;
         document.getElementById('modalContainer').innerHTML = modal;
-        
-        // Load profile pictures after modal is rendered
-        loadAdminProfilePictures();
     })
     .catch(err => {
         alert('Error loading WhatsApp admins: ' + err.message);
-    });
-}
-
-// Load profile pictures for all admins
-function loadAdminProfilePictures() {
-    const profilePics = document.querySelectorAll('.admin-profile-pic');
-    profilePics.forEach((pic) => {
-        const phone = pic.getAttribute('data-phone');
-        const whatsappId = phone + '@c.us';
-        
-        fetch('/api/admin/profile-pic/' + encodeURIComponent(whatsappId))
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.dataUrl) {
-                    pic.innerHTML = `<img src="${data.dataUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
-                }
-            })
-            .catch(err => {
-                // Keep default icon - picture not available
-            });
     });
 }
 
@@ -2047,11 +2253,6 @@ function showAddWhatsAppAdminModal() {
                     <button class="modal-close" onclick="closeModal()">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Admin Name:</label>
-                        <input type="text" id="adminName" placeholder="e.g., RUBEL, Ahmed, etc." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
-                    </div>
-
                     <div style="margin-bottom: 15px;">
                         <label style="display: block; margin-bottom: 8px; font-weight: 600;">Country Code:</label>
                         <select id="countryCode" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
@@ -2102,14 +2303,8 @@ function showAddWhatsAppAdminModal() {
 }
 
 function saveWhatsAppAdmin() {
-    const adminName = document.getElementById('adminName').value.trim();
     const countryCode = document.getElementById('countryCode').value.trim();
     const phoneNumber = document.getElementById('adminPhone').value.trim();
-    
-    if (!adminName) {
-        alert('Please enter admin name');
-        return;
-    }
     
     if (!phoneNumber) {
         alert('Please enter a phone number');
@@ -2125,7 +2320,7 @@ function saveWhatsAppAdmin() {
     fetch('/api/whatsapp-admins/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: fullPhone, name: adminName })
+        body: JSON.stringify({ phone: fullPhone })
     })
     .then(res => res.json())
     .then(data => {
@@ -3907,103 +4102,581 @@ async function deletePaymentKeywordMethod(methodName) {
 }
 
 // Edit Message Settings Modal
-async function showEditMessageModal() {
-    try {
-        const response = await fetch('/api/messages');
-        const data = await response.json();
-        const messages = data.messages || {};
-        
-        let categoriesHTML = '';
-        for (const [category, msgs] of Object.entries(messages)) {
-            if (category === 'title') continue;
-            const title = msgs.title || category;
-            categoriesHTML += `
-                <div style="margin-bottom: 25px; padding: 15px; background: rgba(37, 211, 102, 0.05); border-radius: 8px; border-left: 3px solid #25d366;">
-                    <h4 style="color: #25d366; margin-bottom: 15px;">${title}</h4>
-            `;
-            
-            for (const [key, value] of Object.entries(msgs)) {
-                if (key === 'title') continue;
-                categoriesHTML += `
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; font-weight: 600; margin-bottom: 5px; color: #eee;">${key}:</label>
-                        <textarea 
-                            class="message-input" 
-                            data-category="${category}" 
-                            data-key="${key}" 
-                            style="width: 100%; padding: 10px; background: #16213e; border: 1px solid #2d3561; color: #eee; border-radius: 5px; font-family: monospace; min-height: 80px; resize: vertical;"
-                            placeholder="Enter message">${value}</textarea>
-                    </div>
-                `;
-            }
-            categoriesHTML += `</div>`;
-        }
-        
-        const modalHTML = `
-            <div id="editMessageModal" class="modal" onclick="if(event.target === this) closeModal()">
-                <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
-                    <div class="modal-header">
-                        <h2><i class="fas fa-edit"></i> Edit Bot Messages</h2>
-                        <button class="modal-close" onclick="closeModal()">×</button>
-                    </div>
-                    <div class="modal-body">
-                        ${categoriesHTML}
-                    </div>
-                    <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button onclick="saveAllMessages()" style="flex: 1; padding: 12px; background: #25d366; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                            <i class="fas fa-save"></i> Save All Changes
-                        </button>
-                        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+function showEditMessageModal() {
+    const modalHTML = `
+        <div id="editMessageModal" class="modal" onclick="if(event.target === this) closeModal()">
+            <div class="modal-content" style="max-width: 600px;">
+                <h2><i class="fas fa-edit"></i> Delete Message Settings</h2>
+                <div style="margin-top: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" id="disableDeleteMessageCheckbox" style="width: 20px; height: 20px; cursor: pointer;">
+                        <span style="flex: 1;">
+                            <strong>Disable Delete Message Edit</strong>
+                            <p style="color: #aaa; font-size: 12px; margin-top: 5px;">যখন অর্ডার delete হয়, বট যে message পাঠায় সেটা edit করা যাবে না</p>
+                        </span>
+                    </label>
+                    
+                    <div style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; display: none;" id="deleteMessagePreview">
+                        <p style="color: #aaa; margin-bottom: 10px;">Delete Message:</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-size: 13px; font-family: monospace; color: #43e97b;">
+                            <pre style="margin: 0; white-space: pre-wrap;">✅ *Order Cancelled*
+
+🗑️ Order ID: [ID]
+💎 Diamonds: [Amount]💎
+👤 User: [Name]
+
+📝 Admin Reason: [Message]
+⏹️ Status: DELETED (Correction applied)</pre>
+                        </div>
                     </div>
                 </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeModal()" style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+                    <button onclick="saveDeleteMessageSettings()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Save Settings</button>
+                </div>
             </div>
-        `;
-        document.getElementById('modalContainer').innerHTML = modalHTML;
-        document.getElementById('editMessageModal').style.display = 'flex';
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+    
+    // Load current settings
+    fetch('/api/diamond-status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.disableDeleteMessageEdit) {
+                document.getElementById('disableDeleteMessageCheckbox').checked = true;
+                document.getElementById('deleteMessagePreview').style.display = 'block';
+            }
+        })
+        .catch(e => console.log('Error loading settings:', e));
+    
+    // Show preview when toggle changes
+    document.getElementById('disableDeleteMessageCheckbox').addEventListener('change', (e) => {
+        document.getElementById('deleteMessagePreview').style.display = e.target.checked ? 'block' : 'none';
+    });
+    
+    document.getElementById('editMessageModal').style.display = 'flex';
+}
+
+// Save delete message settings
+async function saveDeleteMessageSettings() {
+    const isDisabled = document.getElementById('disableDeleteMessageCheckbox').checked;
+    
+    try {
+        const response = await fetch('/api/diamond-status/delete-message-setting', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disableDeleteMessageEdit: isDisabled })
+        });
+        
+        if (response.ok) {
+            showNotification('✅ Settings saved successfully!', 'success');
+            closeModal();
+            updateDeleteMessageToggleUI(); // Update the toggle button
+        } else {
+            showNotification('❌ Failed to save settings', 'error');
+        }
     } catch (error) {
-        console.error('Error loading messages:', error);
-        alert('Failed to load messages');
+        console.error('Error saving settings:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
     }
 }
 
-// Save all modified messages
-async function saveAllMessages() {
-    const inputs = document.querySelectorAll('.message-input');
-    const updates = [];
-    
-    for (const input of inputs) {
-        const category = input.dataset.category;
-        const key = input.dataset.key;
-        const value = input.value;
-        updates.push({ category, key, value });
-    }
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
-    for (const { category, key, value } of updates) {
-        try {
-            const response = await fetch(`/api/messages/${category}/${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value })
-            });
-            
-            if (response.ok) {
-                successCount++;
-            } else {
-                errorCount++;
-            }
-        } catch (error) {
-            console.error('Error saving message:', error);
-            errorCount++;
+// Toggle Delete Message Mode - ON/OFF Quick Switch
+async function toggleDeleteMessageMode() {
+    try {
+        // Get current status
+        const response = await fetch('/api/diamond-status');
+        const data = await response.json();
+        const currentState = data.disableDeleteMessageEdit;
+        
+        // Toggle to opposite
+        const newState = !currentState;
+        
+        // Save new state
+        const saveResponse = await fetch('/api/diamond-status/delete-message-setting', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disableDeleteMessageEdit: newState })
+        });
+        
+        if (saveResponse.ok) {
+            updateDeleteMessageToggleUI();
+            const message = newState ? 
+                '🔇 Delete Message: OFF - Orders will be deleted SILENTLY' : 
+                '🔔 Delete Message: ON - Confirmation message will be sent';
+            showNotification(message, 'success');
+        } else {
+            showNotification('❌ Failed to toggle setting', 'error');
         }
-    }
-    
-    if (errorCount === 0) {
-        alert(`✅ All ${successCount} messages saved successfully!`);
-        closeModal();
-    } else {
-        alert(`⚠️ Saved ${successCount}, Failed ${errorCount}`);
+    } catch (error) {
+        console.error('Error toggling delete message mode:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
     }
 }
+
+// Update Delete Message Toggle UI
+async function updateDeleteMessageToggleUI() {
+    try {
+        const response = await fetch('/api/diamond-status');
+        const data = await response.json();
+        const isDisabled = data.disableDeleteMessageEdit;
+        
+        const toggleElement = document.getElementById('deleteMessageToggleText');
+        const toggleIcon = document.getElementById('deleteMessageToggleMenu').querySelector('i');
+        const toggleMenu = document.getElementById('deleteMessageToggleMenu');
+        
+        if (isDisabled) {
+            // OFF mode - delete message disabled (silent)
+            toggleElement.textContent = '🔇 Delete Message: OFF';
+            toggleElement.style.color = '#f5576c'; // Red for OFF
+            toggleIcon.className = 'fas fa-toggle-off';
+            toggleIcon.style.color = '#f5576c';
+            toggleMenu.style.borderColor = '#f5576c';
+            toggleMenu.style.background = 'rgba(245, 87, 108, 0.05)';
+        } else {
+            // ON mode - delete message enabled
+            toggleElement.textContent = '✅ Delete Message: ON';
+            toggleElement.style.color = '#43e97b'; // Green for ON
+            toggleIcon.className = 'fas fa-toggle-on';
+            toggleIcon.style.color = '#43e97b';
+            toggleMenu.style.borderColor = '#43e97b';
+            toggleMenu.style.background = 'rgba(67, 233, 123, 0.05)';
+        }
+    } catch (error) {
+        console.error('Error updating toggle UI:', error);
+    }
+}
+
+// Initialize Delete Message Toggle on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit for DOM to fully load
+    setTimeout(updateDeleteMessageToggleUI, 500);
+    setTimeout(updateAutoApprovalMessageToggleUI, 500);
+});
+
+// Toggle Auto-Approval Message Mode - ON/OFF Quick Switch
+async function toggleAutoApprovalMessage() {
+    try {
+        // Get current status
+        const response = await fetch('/api/diamond-status');
+        const data = await response.json();
+        const currentState = data.disableAutoApprovalMessage;
+        
+        // Toggle to opposite
+        const newState = !currentState;
+        
+        // Save new state
+        const saveResponse = await fetch('/api/diamond-status/auto-approval-message-setting', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disableAutoApprovalMessage: newState })
+        });
+        
+        if (saveResponse.ok) {
+            updateAutoApprovalMessageToggleUI();
+            const message = newState ? 
+                '🔇 Auto-Approve Message: OFF - No message when auto-approved' : 
+                '🔔 Auto-Approve Message: ON - Message sent when auto-approved';
+            showNotification(message, 'success');
+        } else {
+            showNotification('❌ Failed to toggle setting', 'error');
+        }
+    } catch (error) {
+        console.error('Error toggling auto-approval message mode:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
+    }
+}
+
+// Update Auto-Approval Message Toggle UI
+async function updateAutoApprovalMessageToggleUI() {
+    try {
+        const response = await fetch('/api/diamond-status');
+        const data = await response.json();
+        const isDisabled = data.disableAutoApprovalMessage;
+        
+        const toggleElement = document.getElementById('autoApprovalMessageToggleText');
+        const toggleIcon = document.getElementById('autoApprovalMessageToggleMenu').querySelector('i');
+        const toggleMenu = document.getElementById('autoApprovalMessageToggleMenu');
+        
+        if (isDisabled) {
+            // OFF mode - auto-approval message disabled (silent)
+            toggleElement.textContent = '🔇 Auto-Approve Message: OFF';
+            toggleElement.style.color = '#f5576c'; // Red for OFF
+            toggleIcon.className = 'fas fa-toggle-off';
+            toggleIcon.style.color = '#f5576c';
+            toggleMenu.style.borderColor = '#f5576c';
+            toggleMenu.style.background = 'rgba(245, 87, 108, 0.05)';
+        } else {
+            // ON mode - auto-approval message enabled
+            toggleElement.textContent = '✅ Auto-Approve Message: ON';
+            toggleElement.style.color = '#43e97b'; // Green for ON
+            toggleIcon.className = 'fas fa-toggle-on';
+            toggleIcon.style.color = '#43e97b';
+            toggleMenu.style.borderColor = '#43e97b';
+            toggleMenu.style.background = 'rgba(67, 233, 123, 0.05)';
+        }
+    } catch (error) {
+        console.error('Error updating auto-approval toggle UI:', error);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 🔄 REAL-TIME ORDER UPDATE SYSTEM - Advanced Page-Without-Move Updates
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Update order status in real-time without full page reload
+ * @param {string} orderId - Order ID to update
+ * @param {string} newStatus - New status (approved, cancelled, deleted, etc.)
+ * @param {object} data - Additional data from socket event
+ */
+function updateOrderStatusRealTime(orderId, newStatus, data = {}) {
+    try {
+        console.log(`[RT-UPDATE] 🔄 Updating order ${orderId} to ${newStatus}`);
+        
+        // Find the order in the allOrders array
+        const orderIndex = allOrders.findIndex(o => o.id == orderId);
+        
+        if (orderIndex === -1) {
+            console.log(`[RT-UPDATE] ⚠️ Order ${orderId} not found - cannot update`);
+            return;
+        }
+        
+        // Update the order object with new status ONLY
+        const oldStatus = allOrders[orderIndex].status;
+        allOrders[orderIndex].status = newStatus;
+        
+        // Update additional properties if provided
+        if (data.processingStartedAt) {
+            allOrders[orderIndex].processingStartedAt = data.processingStartedAt;
+        }
+        
+        console.log(`[RT-UPDATE] ✅ Order ${orderId}: ${oldStatus} → ${newStatus}`);
+        
+        // 🚫 DO NOT CALL loadOrdersNew() - it causes full page refresh
+        // Instead, just re-render the current page with updated data
+        displayOrdersPage(currentOrderPage);
+        
+        // Highlight the updated row with animation
+        setTimeout(() => {
+            highlightOrderRow(orderId, newStatus);
+        }, 100);
+        
+    } catch (error) {
+        console.error(`[RT-UPDATE] ❌ Error updating order:`, error);
+    }
+}
+
+/**
+ * Add a new order to the table in real-time
+ * @param {object} order - New order object
+ */
+function addNewOrderToTable(order) {
+    try {
+        console.log(`[NEW ORDER] ➕ Adding new order to table:`, order);
+        
+        if (!order || !order.id) {
+            console.warn('[NEW ORDER] Invalid order object');
+            return;
+        }
+        
+        // Check if order already exists
+        const exists = allOrders.find(o => o.id === order.id);
+        if (exists) {
+            console.log('[NEW ORDER] Order already exists, updating instead');
+            updateOrderStatusRealTime(order.id, order.status, order);
+            return;
+        }
+        
+        // Add new order to the beginning of the array
+        allOrders.unshift(order);
+        console.log(`[NEW ORDER] ✅ Order added. Total orders: ${allOrders.length}`);
+        
+        // 🚫 DO NOT CALL loadOrdersNew() - it causes full page refresh
+        // Just re-render the current page with updated data
+        currentOrderPage = 1;
+        displayOrdersPage(1);
+        renderOrdersPagination(allOrders.length);
+        
+        // Highlight the new row
+        setTimeout(() => {
+            highlightOrderRow(order.id, 'new');
+        }, 100);
+        
+    } catch (error) {
+        console.error('[NEW ORDER] Error adding order:', error);
+    }
+}
+
+/**
+ * Remove an order from the table in real-time with fade-out effect
+ * @param {string} orderId - Order ID to remove
+ */
+function removeOrderFromTable(orderId) {
+    try {
+        console.log(`[REMOVE ORDER] 🗑️ Removing order ${orderId} from table`);
+        
+        // Find the order row in DOM
+        const rows = document.querySelectorAll('#ordersTableNew tr');
+        let rowElement = null;
+        
+        for (let row of rows) {
+            const cells = row.querySelectorAll('td');
+            // Check if this is our order (comparing with playerId column)
+            if (cells.length > 0) {
+                // We'll search by finding the order in the table that matches our order ID
+                const ordersInPage = allOrders.filter(o => {
+                    const start = (currentOrderPage - 1) * ordersPerPage;
+                    const end = start + ordersPerPage;
+                    const idx = allOrders.indexOf(o);
+                    return idx >= start && idx < end;
+                });
+                
+                // Just do a full refresh since we can match easily in array
+                break;
+            }
+        }
+        
+        // Remove from allOrders array
+        const orderIndex = allOrders.findIndex(o => o.id == orderId);
+        if (orderIndex !== -1) {
+            const removedOrder = allOrders.splice(orderIndex, 1)[0];
+            console.log(`[REMOVE ORDER] ✅ Removed from array. Total: ${allOrders.length}`);
+            
+            // Re-render the table
+            displayOrdersPage(currentOrderPage);
+            renderOrdersPagination(allOrders.length);
+        } else {
+            console.log('[REMOVE ORDER] Order not found in array');
+        }
+        
+    } catch (error) {
+        console.error('[REMOVE ORDER] Error removing order:', error);
+    }
+}
+
+/**
+ * Highlight/animate an order row to draw attention
+ * @param {string} orderId - Order ID to highlight
+ * @param {string} type - Type of highlight: 'success', 'warning', 'error', 'new'
+ */
+function highlightOrderRow(orderId, type = 'success') {
+    try {
+        console.log(`[HIGHLIGHT] ✨ Highlighting order ${orderId} (type: ${type})`);
+        
+        // Find the row in the current page
+        const allRows = document.querySelectorAll('#ordersTableNew tr');
+        let targetRow = null;
+        
+        for (let row of allRows) {
+            // Check if this row contains our order
+            const cells = row.querySelectorAll('td');
+            if (cells.length > 0) {
+                // Search in allOrders for current page
+                const pageStart = (currentOrderPage - 1) * ordersPerPage;
+                const pageEnd = pageStart + ordersPerPage;
+                const pageOrders = allOrders.slice(pageStart, pageEnd);
+                
+                for (let i = 0; i < pageOrders.length; i++) {
+                    if (pageOrders[i].id == orderId) {
+                        targetRow = allRows[i]; // nth row on page
+                        break;
+                    }
+                }
+            }
+            if (targetRow) break;
+        }
+        
+        if (!targetRow) {
+            console.log('[HIGHLIGHT] Row not found on current page');
+            return;
+        }
+        
+        // Apply highlight animation
+        const highlightColor = 
+            type === 'success' ? 'rgba(67, 233, 123, 0.3)' :
+            type === 'warning' ? 'rgba(254, 202, 87, 0.3)' :
+            type === 'error' ? 'rgba(245, 87, 108, 0.3)' :
+            'rgba(79, 172, 254, 0.3)'; // new
+        
+        // Add animation class
+        targetRow.style.transition = 'background-color 0.3s ease';
+        targetRow.style.backgroundColor = highlightColor;
+        
+        // Remove highlight after animation
+        setTimeout(() => {
+            targetRow.style.backgroundColor = '';
+            targetRow.style.transition = '';
+        }, 2000);
+        
+        console.log(`[HIGHLIGHT] ✅ Applied ${type} highlight`);
+        
+    } catch (error) {
+        console.error('[HIGHLIGHT] Error highlighting row:', error);
+    }
+}
+
+/**
+ * Update processing timer for orders with processing status
+ * This function updates the countdown timer in real-time
+ */
+function updateProcessingTimers() {
+    try {
+        const rows = document.querySelectorAll('#ordersTableNew tr');
+        
+        rows.forEach((row, index) => {
+            const statusCell = row.querySelector('[data-label="Status"]');
+            if (!statusCell) return;
+            
+            const statusBadge = statusCell.querySelector('.status-badge.status-processing');
+            if (!statusBadge) return;
+            
+            const orderId = statusBadge.getAttribute('data-order-id');
+            const startTime = parseInt(statusBadge.getAttribute('data-start-time'));
+            
+            if (!orderId || !startTime) return;
+            
+            // Calculate remaining time
+            const elapsedMs = Date.now() - startTime;
+            const remainingMs = (2 * 60 * 1000) - elapsedMs; // 2 minutes
+            
+            if (remainingMs <= 0) {
+                // Time's up - order should auto-approve
+                // Update will come from server via socket event
+                statusBadge.textContent = '0:00';
+                return;
+            }
+            
+            // Update timer display
+            const totalSeconds = Math.ceil(remainingMs / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Update badge text without changing the HTML structure
+            const icon = statusBadge.innerHTML.match(/<[^>]+>/)?.[0] || '';
+            statusBadge.textContent = `⏳ ${timeDisplay}`;
+        });
+        
+    } catch (error) {
+        console.error('[TIMER] Error updating timers:', error);
+    }
+}
+
+// Start timer update interval when Orders page is visible
+function startOrdersTimerUpdate() {
+    const ordersView = document.getElementById('ordersView');
+    if (!ordersView) return;
+    
+    // Clear any existing interval
+    if (window.ordersTimerInterval) {
+        clearInterval(window.ordersTimerInterval);
+    }
+    
+    // Update timers every second
+    window.ordersTimerInterval = setInterval(() => {
+        const ordersView = document.getElementById('ordersView');
+        if (ordersView && ordersView.classList.contains('active')) {
+            updateProcessingTimers();
+        } else {
+            // Stop timer updates when orders view is not active
+            if (window.ordersTimerInterval) {
+                clearInterval(window.ordersTimerInterval);
+                window.ordersTimerInterval = null;
+            }
+        }
+    }, 1000); // Update every second
+}
+
+// Stop timer updates when view changes
+function stopOrdersTimerUpdate() {
+    if (window.ordersTimerInterval) {
+        clearInterval(window.ordersTimerInterval);
+        window.ordersTimerInterval = null;
+    }
+}
+
+// Hook into view navigation to manage timer updates and polling
+const originalShowView = window.showView;
+window.showView = function(viewId) {
+    originalShowView.call(this, viewId);
+    
+    if (viewId === 'ordersView') {
+        startOrdersTimerUpdate();
+        enableOrdersPolling(); // Start real-time polling
+    } else {
+        stopOrdersTimerUpdate();
+        disableOrdersPolling(); // Stop polling when leaving Orders view
+    }
+};
+
+console.log('[REAL-TIME SYSTEM] ✅ Real-time order update system initialized');
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 🔄 BACKGROUND AUTO-REFRESH INDICATOR - Visual feedback for silent updates
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Show background refresh indicator (when data is updating silently)
+ */
+function showBgRefreshIndicator() {
+    try {
+        const indicator = document.getElementById('bgRefreshIndicator');
+        if (!indicator) return;
+        
+        // Remove any existing 'done' animation
+        indicator.classList.remove('done');
+        
+        // Show the indicator
+        indicator.classList.add('active');
+        
+        console.log('[BG REFRESH] 🔄 Indicator shown');
+    } catch (error) {
+        console.error('[BG REFRESH] Error showing indicator:', error);
+    }
+}
+
+/**
+ * Hide background refresh indicator with completion animation
+ */
+function hideBgRefreshIndicator() {
+    try {
+        const indicator = document.getElementById('bgRefreshIndicator');
+        if (!indicator) return;
+        
+        // Add completion animation
+        indicator.classList.add('done');
+        
+        // Remove active state
+        setTimeout(() => {
+            indicator.classList.remove('active');
+            indicator.classList.remove('done');
+        }, 2500); // Wait for animation to complete
+        
+        console.log('[BG REFRESH] ✅ Indicator hidden');
+    } catch (error) {
+        console.error('[BG REFRESH] Error hiding indicator:', error);
+    }
+}
+
+/**
+ * Wrap silent refresh with indicator
+ */
+async function silentRefreshDataWithIndicator() {
+    try {
+        // Show indicator that data is updating
+        showBgRefreshIndicator();
+        
+        // Perform silent refresh
+        await silentRefreshData();
+        
+        // Hide indicator after update completes
+        hideBgRefreshIndicator();
+    } catch (error) {
+        console.error('[BG REFRESH WITH INDICATOR] Error:', error);
+        hideBgRefreshIndicator();
+    }
+}
+
+console.log('[BG REFRESH INDICATOR] ✅ Background refresh indicator system initialized');

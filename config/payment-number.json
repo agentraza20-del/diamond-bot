@@ -14,22 +14,19 @@
       "accountName": "md rubel mia",
       "branch": "mymensingh",
       "accountNumber": "324623894746",
-      "isBank": true,
-      "enabled": false
+      "isBank": true
     },
     {
       "method": "Bkash",
       "number": "01721016186",
       "type": "Personal",
-      "isBank": false,
-      "enabled": false
+      "isBank": false
     },
     {
       "method": "Rocket",
       "number": "01721016186",
       "type": "Personal",
-      "isBank": false,
-      "enabled": false
+      "isBank": false
     }
   ],
   "message": "💰 *Payment Information*\n\n📱 আমাদের পেমেন্ট নম্বর:\n\n{numbers}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।"

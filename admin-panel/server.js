@@ -903,7 +903,9 @@ app.get('/api/orders', async (req, res) => {
                     amount: Math.round(entry.diamonds * entry.rate),
                     diamonds: entry.diamonds || 0,
                     status: entry.status || 'pending',
-                    date: entry.createdAt || new Date().toISOString()
+                    date: entry.createdAt || new Date().toISOString(),
+                    processingStartedAt: entry.processingStartedAt || null,
+                    processingTimeout: entry.processingTimeout || null
                 });
             });
         });
@@ -913,6 +915,43 @@ app.get('/api/orders', async (req, res) => {
         res.json(ordersArray);
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Get single order status by ID
+app.get('/api/orders/:orderId', async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const database = await readJSON(databasePath);
+        const groups = database.groups || {};
+
+        for (const [groupId, groupData] of Object.entries(groups)) {
+            const entries = groupData.entries || [];
+            const entry = entries.find(e => e.id == orderId);
+            
+            if (entry) {
+                return res.json({
+                    success: true,
+                    order: {
+                        id: entry.id,
+                        phone: entry.userName || entry.userId || 'Unknown',
+                        playerIdType: 'Free Fire',
+                        playerId: entry.playerIdNumber || entry.userId || '',
+                        amount: Math.round(entry.diamonds * entry.rate),
+                        diamonds: entry.diamonds || 0,
+                        status: entry.status || 'pending',
+                        date: entry.createdAt || new Date().toISOString(),
+                        processingStartedAt: entry.processingStartedAt || null,
+                        deletedAt: entry.deletedAt || null,
+                        deletedBy: entry.deletedBy || null
+                    }
+                });
+            }
+        }
+
+        res.status(404).json({ success: false, error: 'Order not found' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -1126,89 +1165,6 @@ app.delete('/api/whatsapp-admins/delete/:index', async (req, res) => {
     }
 });
 
-// Get blocked admins
-app.get('/api/blocked-admins', async (req, res) => {
-    try {
-        const blockedAdminsPath = path.join(__dirname, '..', 'config', 'blocked-admins.json');
-        const blockedAdmins = await readJSON(blockedAdminsPath);
-        res.json({ blockedAdmins: Array.isArray(blockedAdmins) ? blockedAdmins : [] });
-    } catch (error) {
-        res.json({ blockedAdmins: [] });
-    }
-});
-
-// Block WhatsApp Admin
-app.post('/api/whatsapp-admins/block', async (req, res) => {
-    try {
-        const { phone } = req.body;
-        if (!phone) {
-            return res.status(400).json({ error: 'Phone number is required' });
-        }
-
-        const blockedAdminsPath = path.join(__dirname, '..', 'config', 'blocked-admins.json');
-        let blockedAdmins = await readJSON(blockedAdminsPath);
-        if (!Array.isArray(blockedAdmins)) blockedAdmins = [];
-
-        // Check if already blocked
-        if (blockedAdmins.some(b => b.phone === phone)) {
-            return res.json({ success: true, message: 'Admin already blocked' });
-        }
-
-        // Add to blocked list
-        blockedAdmins.push({
-            phone: phone,
-            whatsappId: phone + '@c.us',
-            blockedAt: new Date().toISOString(),
-            reason: 'Blocked via admin panel'
-        });
-
-        await writeJSON(blockedAdminsPath, blockedAdmins);
-
-        // Log the action
-        const logEntry = `[${new Date().toISOString()}] Blocked WhatsApp admin: ${phone}`;
-        const logsPath = path.join(__dirname, 'admin-logs.txt');
-        const existingLogs = await fs.readFile(logsPath, 'utf8').catch(() => '');
-        await fs.writeFile(logsPath, existingLogs + logEntry + '\n');
-
-        res.json({ success: true, message: 'Admin blocked successfully' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Unblock WhatsApp Admin
-app.post('/api/whatsapp-admins/unblock', async (req, res) => {
-    try {
-        const { phone } = req.body;
-        if (!phone) {
-            return res.status(400).json({ error: 'Phone number is required' });
-        }
-
-        const blockedAdminsPath = path.join(__dirname, '..', 'config', 'blocked-admins.json');
-        let blockedAdmins = await readJSON(blockedAdminsPath);
-        if (!Array.isArray(blockedAdmins)) blockedAdmins = [];
-
-        // Remove from blocked list
-        const filtered = blockedAdmins.filter(b => b.phone !== phone);
-        
-        if (filtered.length !== blockedAdmins.length) {
-            await writeJSON(blockedAdminsPath, filtered);
-            
-            // Log the action
-            const logEntry = `[${new Date().toISOString()}] Unblocked WhatsApp admin: ${phone}`;
-            const logsPath = path.join(__dirname, 'admin-logs.txt');
-            const existingLogs = await fs.readFile(logsPath, 'utf8').catch(() => '');
-            await fs.writeFile(logsPath, existingLogs + logEntry + '\n');
-
-            res.json({ success: true, message: 'Admin unblocked successfully' });
-        } else {
-            res.json({ success: true, message: 'Admin was not blocked' });
-        }
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Analytics Data
 app.get('/api/analytics', async (req, res) => {
     try {
@@ -1353,6 +1309,35 @@ app.get('/api/auto-deductions', async (req, res) => {
         
         res.json(enhancedDeductions);
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Order Event API - Handle order status changes (delete, cancel, etc)
+app.post('/api/order-event', async (req, res) => {
+    try {
+        const { type, reason, groupId, entry, message } = req.body;
+        
+        if (!type || !entry) {
+            return res.status(400).json({ error: 'Missing event type or entry' });
+        }
+
+        console.log(`[ORDER-EVENT] 📨 RECEIVED EVENT: ${type}: ${entry.id} - ${reason}`);
+        
+        // Emit event to all connected admin panel clients via Socket.io
+        io.emit('orderEvent', {
+            type: type,
+            reason: reason,
+            groupId: groupId,
+            entry: entry,
+            message: message,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log(`[ORDER-EVENT] ✅ Broadcasted to admin panel clients`);
+        res.json({ success: true, message: 'Event broadcasted' });
+    } catch (error) {
+        console.error('[ORDER-EVENT] Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1801,6 +1786,56 @@ app.post('/api/diamond-status/edit-message', async (req, res) => {
     }
 });
 
+// Delete Message Setting
+app.post('/api/diamond-status/delete-message-setting', async (req, res) => {
+    try {
+        const { disableDeleteMessageEdit } = req.body;
+        
+        if (typeof disableDeleteMessageEdit !== 'boolean') {
+            return res.status(400).json({ success: false, error: 'Invalid setting' });
+        }
+
+        let status = await readJSON(diamondStatusPath);
+        status.disableDeleteMessageEdit = disableDeleteMessageEdit;
+        status.lastDeleteMessageSettingUpdate = new Date().toISOString();
+        await writeJSON(diamondStatusPath, status);
+        
+        // Log the action
+        const logEntry = `[${new Date().toISOString()}] 🗑️ Delete message edit: ${disableDeleteMessageEdit ? 'DISABLED' : 'ENABLED'}\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('diamondStatusChanged', status);
+        res.json({ success: true, status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Auto-Approval Message Setting
+app.post('/api/diamond-status/auto-approval-message-setting', async (req, res) => {
+    try {
+        const { disableAutoApprovalMessage } = req.body;
+        
+        if (typeof disableAutoApprovalMessage !== 'boolean') {
+            return res.status(400).json({ success: false, error: 'Invalid setting' });
+        }
+
+        let status = await readJSON(diamondStatusPath);
+        status.disableAutoApprovalMessage = disableAutoApprovalMessage;
+        status.lastAutoApprovalMessageSettingUpdate = new Date().toISOString();
+        await writeJSON(diamondStatusPath, status);
+        
+        // Log the action
+        const logEntry = `[${new Date().toISOString()}] 🤖 Auto-approval message: ${disableAutoApprovalMessage ? 'DISABLED' : 'ENABLED'}\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('diamondStatusChanged', status);
+        res.json({ success: true, status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Commands Management APIs
 app.get('/api/commands', async (req, res) => {
     try {
@@ -1967,12 +2002,121 @@ app.post('/api/payment-keywords/update', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════════
+// 🔄 REAL-TIME ORDER BROADCAST SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Helper function to broadcast order updates to all admin panel users
+ * Called by bot or admin panel when order status changes
+ */
+global.broadcastOrderUpdate = function(event, data) {
+    try {
+        const timestamp = new Date().toISOString();
+        const eventData = {
+            ...data,
+            timestamp,
+            type: event
+        };
+        
+        console.log(`[BROADCAST] 📡 Broadcasting order event: ${event}`, eventData);
+        
+        // Emit to all connected admin panel users
+        io.emit(event, eventData);
+        
+        // Log the broadcast
+        console.log(`[BROADCAST] ✅ ${event} sent to ${io.engine.clientsCount || 0} connected clients`);
+        
+    } catch (error) {
+        console.error(`[BROADCAST] ❌ Error broadcasting:`, error);
+    }
+};
+
+/**
+ * Helper function to broadcast new order creation
+ */
+global.broadcastNewOrder = function(order) {
+    global.broadcastOrderUpdate('newOrderCreated', {
+        orderId: order.id,
+        order: {
+            id: order.id,
+            phone: order.phone || order.userName,
+            playerId: order.playerId || order.playerIdNumber,
+            diamonds: order.diamonds,
+            amount: order.amount,
+            status: order.status,
+            date: order.date || new Date().toISOString()
+        },
+        message: `🎯 New order from ${order.phone || 'User'}: ${order.diamonds} diamonds`
+    });
+};
+
+/**
+ * Helper function to broadcast order status update
+ */
+global.broadcastOrderStatusChange = function(orderId, newStatus, message) {
+    global.broadcastOrderUpdate('orderStatusUpdated', {
+        orderId,
+        status: newStatus,
+        message: message || `Order ${newStatus}`,
+        processingStartedAt: new Date().toISOString()
+    });
+};
+
+/**
+ * Helper function to broadcast order approval
+ */
+global.broadcastOrderApproved = function(orderId, message) {
+    global.broadcastOrderUpdate('orderApproved', {
+        orderId,
+        status: 'approved',
+        message: message || '✅ Order approved'
+    });
+};
+
+/**
+ * Helper function to broadcast order deletion
+ */
+global.broadcastOrderDeleted = function(orderId, message) {
+    global.broadcastOrderUpdate('orderDeleted', {
+        orderId,
+        status: 'deleted',
+        message: message || '🗑️ Order deleted'
+    });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+
 // Socket.IO real-time updates
 io.on('connection', (socket) => {
-    console.log('Admin connected:', socket.id);
+    console.log('✅ Admin panel connected:', socket.id);
 
     socket.on('disconnect', () => {
-        console.log('Admin disconnected:', socket.id);
+        console.log('❌ Admin panel disconnected:', socket.id);
+    });
+    
+    // Handle real-time requests from admin panel
+    socket.on('requestOrderUpdate', async (orderId) => {
+        try {
+            const database = await readJSON(databasePath);
+            const groups = database.groups || {};
+            
+            for (const [groupId, groupData] of Object.entries(groups)) {
+                const entries = groupData.entries || [];
+                const entry = entries.find(e => e.id == orderId);
+                
+                if (entry) {
+                    socket.emit('orderUpdated', {
+                        orderId,
+                        status: entry.status,
+                        data: entry
+                    });
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching order:', error);
+        }
     });
 });
 

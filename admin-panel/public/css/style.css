@@ -1131,6 +1131,18 @@ body {
     border: 1px solid #feca57;
 }
 
+.status-processing {
+    background: #4facfe !important;
+    color: #ffffff !important;
+    border: 1px solid #4facfe;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 .status-deleted {
     background: #f5576c !important;
     color: #ffffff !important;
@@ -2692,5 +2704,220 @@ body {
     .data-table tbody td:before {
         flex: 0 0 35%;
         font-size: 0.8rem;
+    }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════════ */
+/* 🔄 REAL-TIME UPDATE ANIMATIONS - Orders Table */
+/* ═════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Row highlight animations */
+@keyframes highlightSuccess {
+    0% { background-color: rgba(67, 233, 123, 0.5); }
+    100% { background-color: transparent; }
+}
+
+@keyframes highlightWarning {
+    0% { background-color: rgba(254, 202, 87, 0.5); }
+    100% { background-color: transparent; }
+}
+
+@keyframes highlightError {
+    0% { background-color: rgba(245, 87, 108, 0.5); }
+    100% { background-color: transparent; }
+}
+
+@keyframes highlightNew {
+    0% { background-color: rgba(79, 172, 254, 0.5); }
+    100% { background-color: transparent; }
+}
+
+/* Pulse animation for new orders */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* Status badge update animation */
+@keyframes statusChange {
+    0% { transform: scale(0.95); opacity: 0.5; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Real-time row transitions */
+.data-table tbody tr {
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.data-table tbody tr[data-highlight="success"] {
+    animation: highlightSuccess 2s ease-out;
+}
+
+.data-table tbody tr[data-highlight="warning"] {
+    animation: highlightWarning 2s ease-out;
+}
+
+.data-table tbody tr[data-highlight="error"] {
+    animation: highlightError 2s ease-out;
+}
+
+.data-table tbody tr[data-highlight="new"] {
+    animation: highlightNew 2s ease-out;
+    box-shadow: 0 0 10px rgba(79, 172, 254, 0.4);
+}
+
+/* Status badge animation */
+.status-badge {
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.status-badge[data-updated="true"] {
+    animation: statusChange 0.5s ease;
+}
+
+/* Processing timer animation */
+.status-badge.status-processing {
+    animation: pulse 1s infinite;
+}
+
+/* Smooth fade transitions for deleted rows */
+.data-table tbody tr.fade-out {
+    animation: fadeOut 0.5s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    0% { 
+        opacity: 1; 
+        transform: translateX(0);
+    }
+    100% { 
+        opacity: 0; 
+        transform: translateX(-20px);
+    }
+}
+
+/* Real-time update indicator */
+.real-time-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--success-color);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+/* Order count badge animation */
+.action-badge {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════════ */
+/* 🔄 BACKGROUND AUTO-REFRESH INDICATOR - Subtle and Non-Intrusive */
+/* ═════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Background refresh container */
+.bg-refresh-indicator {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(79, 172, 254, 0.1);
+    border: 1px solid rgba(79, 172, 254, 0.3);
+    border-radius: 20px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 100;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+/* Show when active */
+.bg-refresh-indicator.active {
+    opacity: 1;
+}
+
+/* Spinner animation */
+.bg-refresh-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(79, 172, 254, 0.3);
+    border-top-color: #4facfe;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Text label */
+.bg-refresh-text {
+    font-size: 0.75rem;
+    color: #4facfe;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Checkmark when done */
+.bg-refresh-check {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #43e97b;
+    font-size: 0.8rem;
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+    0% {
+        opacity: 0;
+        transform: scale(0);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Fade out after completion */
+.bg-refresh-indicator.done {
+    animation: fadeOutIndicator 0.5s ease-out forwards;
+    animation-delay: 2s;
+}
+
+@keyframes fadeOutIndicator {
+    to {
+        opacity: 0;
+    }
+}
+
+/* For mobile - adjust position */
+@media (max-width: 768px) {
+    .bg-refresh-indicator {
+        top: 65px;
+        right: 10px;
+        padding: 6px 10px;
+    }
+    
+    .bg-refresh-text {
+        display: none;
     }
 }

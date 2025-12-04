@@ -38,6 +38,12 @@
         </div>
     </nav>
 
+    <!-- Background Auto-Refresh Indicator -->
+    <div class="bg-refresh-indicator" id="bgRefreshIndicator">
+        <div class="bg-refresh-spinner"></div>
+        <span class="bg-refresh-text">Updating...</span>
+    </div>
+
     <!-- Main Content -->
     <main class="main-content" id="mainContent">
         <!-- Home View -->
@@ -99,6 +105,21 @@
                 <div class="group-messages-list" id="groupMessagesList">
                     <div class="loading-placeholder">
                         <i class="fas fa-spinner fa-spin"></i> Loading groups...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto-Approval System Info -->
+            <div class="section">
+                <div class="info-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 10px;"><i class="fas fa-info-circle"></i> ⏳ Auto-Approval System</h3>
+                    <div style="font-size: 14px; line-height: 1.6;">
+                        <p><strong>কিভাবে কাজ করে:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 8px;">
+                            <li>✅ Admin "done" লিখলে → Order <span style="background: #4facfe; padding: 2px 8px; border-radius: 3px;">⏳ processing</span> হয়</li>
+                            <li>✅ 2 মিনিট পর → স্বয়ংক্রিয়ভাবে <span style="background: #43e97b; padding: 2px 8px; border-radius: 3px;">approved</span> হয়</li>
+                            <li>✅ যদি Admin message delete করে → Order <span style="background: #f5576c; padding: 2px 8px; border-radius: 3px;">cancelled</span> হয়</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -280,10 +301,11 @@
                             <th>Amount</th>
                             <th>Status</th>
                             <th>Date</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="ordersTableNew">
-                        <tr><td colspan="6" class="loading">Loading...</td></tr>
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -392,9 +414,13 @@
                     <i class="fas fa-bell"></i>
                     <span>Approve Messages</span>
                 </div>
-                <div class="menu-item" onclick="showEditMessageModal()">
-                    <i class="fas fa-edit"></i>
-                    <span>Edit Message Settings</span>
+                <div class="menu-item" onclick="toggleDeleteMessageMode()" id="deleteMessageToggleMenu" style="border-color: #feca57; background: rgba(254, 202, 87, 0.05);">
+                    <i class="fas fa-toggle-on" style="color: #feca57; font-size: 24px;"></i>
+                    <span id="deleteMessageToggleText" style="color: #feca57; font-weight: 600;">Delete Message: OFF</span>
+                </div>
+                <div class="menu-item" onclick="toggleAutoApprovalMessage()" id="autoApprovalMessageToggleMenu" style="border-color: #4facfe; background: rgba(79, 172, 254, 0.05);">
+                    <i class="fas fa-toggle-on" style="color: #4facfe; font-size: 24px;"></i>
+                    <span id="autoApprovalMessageToggleText" style="color: #4facfe; font-weight: 600;">Auto-Approve Message: ON</span>
                 </div>
                 <div class="menu-item" onclick="showCommandsModal()">
                     <i class="fas fa-terminal"></i>

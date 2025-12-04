@@ -2,6 +2,20 @@ const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
+// Convert Bengali numbers to English
+function convertBengaliToEnglish(text) {
+    if (!text) return text;
+    
+    const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    
+    let result = text.toString();
+    for (let i = 0; i < 10; i++) {
+        result = result.replace(new RegExp(bengaliDigits[i], 'g'), englishDigits[i]);
+    }
+    return result;
+}
+
 function waFormatCurrency(amount) {
     return `৳${parseFloat(amount).toFixed(2)}`;
 }
@@ -183,7 +197,9 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
         
         if (lines.length < 2) {
             // If not multi-line, treat as single number (old format)
-            const diamonds = parseInt(fullMessage.trim());
+            // Convert Bengali numbers to English if needed
+            const diamondsStrEnglish = convertBengaliToEnglish(fullMessage.trim());
+            const diamonds = parseInt(diamondsStrEnglish);
             if (!isNaN(diamonds)) {
                 return await handleDiamondRequest(msg, userId, userName, groupId, diamonds, groupName);
             }
@@ -192,7 +208,9 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
 
         const userIdFromMsg = lines[0];
         const diamondsStr = lines[1];
-        const diamonds = parseInt(diamondsStr);
+        // Convert Bengali numbers to English if needed
+        const diamondsStrEnglish = convertBengaliToEnglish(diamondsStr);
+        const diamonds = parseInt(diamondsStrEnglish);
 
         // Validate
         if (isNaN(diamonds) || diamonds <= 0) {
@@ -401,9 +419,9 @@ async function approvePendingDiamond(requestId, groupId) {
     try {
         // Check if it's from database or in-memory
         if (requestId.startsWith('db_')) {
-            // It's a database entry - just approve it
+            // It's a database entry - set to PROCESSING instead of approved immediately
             const entryId = parseInt(requestId.replace('db_', ''));
-            db.approveEntry(groupId, entryId);
+            db.setEntryProcessing(groupId, entryId);  // Changed from approveEntry to setEntryProcessing
             
             // Get the entry to return info
             const groupData = db.getGroupData(groupId);
@@ -578,7 +596,7 @@ async function approvePendingDiamond(requestId, groupId) {
         }
 
         // Entry should already be in database from handleMultiLineDiamondRequest
-        // Just approve it - find the correct pending entry by matching diamonds
+        // Just set to processing instead of approved
         const groupData = db.getGroupData(groupId);
         const entry = groupData.entries.find(e => 
             e.userId === request.userId && 
@@ -586,12 +604,12 @@ async function approvePendingDiamond(requestId, groupId) {
             e.status === 'pending'
         );
         if (entry) {
-            db.approveEntry(groupId, entry.id);
+            db.setEntryProcessing(groupId, entry.id);  // Changed from approveEntry to setEntryProcessing
         }
 
-        // Mark as approved
-        pendingDiamondRequests[requestId].status = 'approved';
-        pendingDiamondRequests[requestId].approvedAt = new Date().toISOString();
+        // Mark as processing (not approved yet)
+        pendingDiamondRequests[requestId].status = 'processing';
+        pendingDiamondRequests[requestId].processingAt = new Date().toISOString();
         if (entry) {
             pendingDiamondRequests[requestId].orderId = entry.id;
         }
@@ -729,13 +747,15 @@ async function approvePendingDiamond(requestId, groupId) {
             autoDeductedAmount: autoDeductedAmount,
             finalBalance: finalBalance,
             stockInfo: stockResult,
-            message: `✅ *Diamond Order Approved*\n\n` +
+            message: `⏳ *Diamond Order Processing*\n\n` +
                 `👤 User ID: ${request.userIdFromMsg}\n` +
                 `💎 Diamonds: ${request.diamonds}💎\n` +
                 `💰 Amount Due: ${waFormatCurrency(totalValue)}\n` +
                 `📊 Rate: ${waFormatCurrency(rate)}/💎\n\n` +
-                `✓ Status: Approved\n` +
-                `Order ID: ${entry?.id || 'pending'}` +
+                `⏱️ Status: Processing (2 min)\n` +
+                `Order ID: ${entry?.id || 'pending'}\n` +
+                `⏰ Will auto-approve in 2 minutes\n` +
+                `📱 Delete message to cancel` +
                 autoDeductMessage +
                 stockMessage
         };
@@ -872,6 +892,11 @@ async function cancelDiamondRequest(msg, userId, userName, groupId, orderId = nu
                 db.saveDatabase(fullDb);
                 deleted = true;
                 console.log(`[CANCEL] Order ${orderId} deleted by ${userName}`);
+                
+                // 🔄 Broadcast order deletion to admin panel in real-time
+                if (global.broadcastOrderDeleted) {
+                    global.broadcastOrderDeleted(orderId, `🗑️ Order deleted by ${userName}`);
+                }
             }
         } else {
             // Cancel pending request (multi-line format) for this user
@@ -882,6 +907,7 @@ async function cancelDiamondRequest(msg, userId, userName, groupId, orderId = nu
                     const entry = groupData.entries[i];
                     if (entry.userId === userId && entry.status === 'pending') {
                         deletedDetails = entry;
+                        const deletedId = entry.id;
                         groupData.entries.splice(i, 1);
                         // Save back to database
                         const fullDb = db.loadDatabase();
@@ -889,6 +915,11 @@ async function cancelDiamondRequest(msg, userId, userName, groupId, orderId = nu
                         db.saveDatabase(fullDb);
                         deleted = true;
                         console.log(`[CANCEL] Database entry deleted by ${userName}`);
+                        
+                        // 🔄 Broadcast order deletion to admin panel in real-time
+                        if (global.broadcastOrderDeleted && deletedId) {
+                            global.broadcastOrderDeleted(deletedId, `🗑️ Order deleted by ${userName}`);
+                        }
                         break;
                     }
                 }
@@ -903,6 +934,11 @@ async function cancelDiamondRequest(msg, userId, userName, groupId, orderId = nu
                     delete pendingDiamondRequests[reqId];
                     deleted = true;
                     console.log(`[CANCEL] Pending request ${reqId} cancelled by ${userName}`);
+                    
+                    // 🔄 Broadcast order deletion to admin panel in real-time
+                    if (global.broadcastOrderDeleted && reqId) {
+                        global.broadcastOrderDeleted(reqId, `🗑️ Order cancelled by ${userName}`);
+                    }
                     break;
                 }
             }

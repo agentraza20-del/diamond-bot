@@ -155,6 +155,22 @@ function addEntry(groupId, userId, diamonds, rate, groupName, messageId, userNam
 }
 
 // Approve entry
+// Change entry status to 'processing' when admin approves (sends "done")
+function setEntryProcessing(groupId, entryId) {
+    const db = loadDatabase();
+    if (!db.groups[groupId]) return false;
+    
+    const entry = db.groups[groupId].entries.find(e => e.id === entryId);
+    if (entry) {
+        entry.status = 'processing';
+        entry.processingStartedAt = new Date().toISOString();
+        entry.processingTimeout = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes
+        saveDatabase(db);
+        return true;
+    }
+    return false;
+}
+
 function approveEntry(groupId, entryId) {
     const db = loadDatabase();
     if (!db.groups[groupId]) return false;
@@ -440,6 +456,7 @@ module.exports = {
     updateUserBalance,
     addEntry,
     approveEntry,
+    setEntryProcessing,
     deleteEntry,
     getGroupData,
     calculateUserDue,

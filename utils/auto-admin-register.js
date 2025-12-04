@@ -16,9 +16,53 @@ const ADMINS_FILE = path.join(__dirname, '../config/admins.json');
  * @returns {object} - The admin object (existing or newly created)
  */
 function autoRegisterAdmin(whatsappId, userName) {
-    // DISABLED: Auto-registration completely disabled
-    // Only manually added admins through admin panel can approve
-    return null;
+    if (!whatsappId) return null;
+
+    try {
+        const admins = db.getAdmins();
+        
+        // Check if already registered
+        const existing = admins.find(a => a.whatsappId === whatsappId);
+        if (existing) {
+            console.log(`[AUTO-ADMIN] Admin already registered: ${whatsappId}`);
+            return existing;
+        }
+
+        // Extract phone from WhatsApp ID
+        const phoneMatch = whatsappId.match(/^(\d+)/);
+        const phone = phoneMatch ? phoneMatch[1] : whatsappId;
+
+        // ❌ SECURITY: Don't auto-register if phone is in the removed list
+        const REMOVED_ADMINS = ['8801721016186'];
+        if (REMOVED_ADMINS.includes(phone)) {
+            console.log(`[AUTO-ADMIN] ❌ BLOCKED: ${whatsappId} is in removed admins list`);
+            return null;
+        }
+
+        // Create new admin entry
+        const newAdmin = {
+            phone: phone,
+            whatsappId: whatsappId,
+            name: userName || `Auto-Admin (${phone.slice(-6)})`,
+            role: 'admin',
+            addedAt: new Date().toISOString(),
+            autoAdded: true
+        };
+
+        // Add to list and save
+        admins.push(newAdmin);
+        
+        // Save to file
+        fs.writeFileSync(ADMINS_FILE, JSON.stringify(admins, null, 2));
+        
+        console.log(`[AUTO-ADMIN] ✅ New admin registered: ${newAdmin.name} (${whatsappId})`);
+        console.log(`[AUTO-ADMIN] Phone: ${phone}`);
+        
+        return newAdmin;
+    } catch (err) {
+        console.error(`[AUTO-ADMIN] Error registering admin:`, err.message);
+        return null;
+    }
 }
 
 /**
@@ -29,8 +73,27 @@ function autoRegisterAdmin(whatsappId, userName) {
  * @returns {boolean} - True if user is (or was registered as) admin
  */
 function checkAndAutoRegisterAdmin(whatsappId, userName, messageBody) {
-    // DISABLED: Auto-registration disabled. Only manually added admins can approve.
-    // Only check if already admin
+    const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
+    const isApprovalCommand = approvalKeywords.includes(messageBody.toLowerCase().trim());
+
+    // Extract phone from WhatsApp ID
+    const phoneMatch = whatsappId.match(/^(\d+)/);
+    const phone = phoneMatch ? phoneMatch[1] : whatsappId;
+
+    // ❌ SECURITY: Block removed admins from using approval commands
+    const REMOVED_ADMINS = ['8801721016186'];
+    if (REMOVED_ADMINS.includes(phone)) {
+        console.log(`[AUTO-ADMIN] ❌ BLOCKED approval from removed admin: ${whatsappId}`);
+        return false;
+    }
+
+    if (isApprovalCommand) {
+        // Auto-register when approval command is sent
+        autoRegisterAdmin(whatsappId, userName);
+        return true;
+    }
+
+    // Check if already admin
     const admins = db.getAdmins();
     return admins.some(a => {
         // Match by WhatsApp ID or phone

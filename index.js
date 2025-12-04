@@ -19,11 +19,11 @@ const { delay, replyWithDelay, sendMessageWithDelay, messageCounter } = require(
 // 🔍 Admin Matcher - Handle different WhatsApp ID formats
 const { isAdminByAnyVariant, getAdminInfo } = require('./utils/admin-matcher');
 
-// 🤖 Auto Admin Registration - DISABLED (only manual admin panel registration allowed)
-// const { autoRegisterAdmin, checkAndAutoRegisterAdmin } = require('./utils/auto-admin-register');
+// 🤖 Auto-Approval - Auto-approve orders after 2 minutes
+const { startAutoApprovalTimer, cancelAutoApprovalTimer, restoreProcessingTimers, cancelAllTimers } = require('./utils/auto-approval');
 
-// 📸 Profile Picture Handler
-const { fetchAdminProfilePictures, captureProfilePictureFromMessage } = require('./utils/profile-picture');
+// 🤖 Auto Admin Registration
+const { autoRegisterAdmin, checkAndAutoRegisterAdmin } = require('./utils/auto-admin-register');
 
 // Connect to Admin Panel Socket.IO server
 const adminSocket = io('http://localhost:3000');
@@ -101,14 +101,9 @@ client.on('ready', () => {
     console.log('✅ WhatsApp Bot Ready!');
     console.log('🤖 Bot is now listening for messages...\n');
     
-    // 📸 Fetch admin profile pictures
-    const admins = db.getAdmins();
-    if (admins && admins.length > 0) {
-        console.log('[PROFILE-PIC] 📸 Fetching admin profile pictures...');
-        fetchAdminProfilePictures(client, admins).catch(err => {
-            console.error('[PROFILE-PIC] Error fetching profiles:', err.message);
-        });
-    }
+    // 🤖 Restore any processing orders that were in progress before bot crashed
+    console.log('[STARTUP] 🔄 Restoring processing timers...');
+    restoreProcessingTimers(client);
     
     // Start periodic check for deleted messages (every 15 seconds)
     startDeletedMessageChecker(client);
@@ -214,10 +209,7 @@ client.on('message', async (msg) => {
                 const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
                 const paymentConfig = JSON.parse(paymentNumberData);
                 
-                // Filter only enabled payment numbers
-                const enabledPayments = paymentConfig.paymentNumbers.filter(p => p.enabled !== false);
-                
-                if (!enabledPayments || enabledPayments.length === 0) {
+                if (!paymentConfig.paymentNumbers || paymentConfig.paymentNumbers.length === 0) {
                     await msg.reply('❌ পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
                     return;
                 }
@@ -226,7 +218,7 @@ client.on('message', async (msg) => {
                 
                 // Group by method
                 const methodGroups = {};
-                enabledPayments.forEach(payment => {
+                paymentConfig.paymentNumbers.forEach(payment => {
                     if (!methodGroups[payment.method]) {
                         methodGroups[payment.method] = [];
                     }
@@ -311,58 +303,52 @@ client.on('message', async (msg) => {
                     
                     const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
                     
-                    // Check if method is actually enabled
-                    if (!methodConfig.enabled) {
-                        console.log(`[PAYMENT-INFO] Method ${matchedMethod} is disabled, ignoring keyword`);
-                        // Don't send any response, let other handlers process this
-                    } else {
-                        // Find matching payment numbers for this method - filter only enabled ones
-                        const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
-                            p.method.toLowerCase() === matchedMethod.toLowerCase() && p.enabled !== false
-                        );
-                        
-                        if (matchedNumbers.length === 0) {
-                            await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
-                            messageCounter.incrementCounter();
-                            return;
-                        }
-                        
-                        let numbersText = '';
-                        
-                        // Format each matched payment number
-                        matchedNumbers.forEach((payment, index) => {
-                            if (payment.isBank) {
-                                numbersText += `🏦 *${payment.method}*\n`;
-                                numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
-                                numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
-                                numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
-                                numbersText += `📋 ধরন: ${payment.type}\n`;
-                                if (index < matchedNumbers.length - 1) numbersText += '\n';
-                            } else {
-                                numbersText += `📱 *${payment.method}* (${payment.type})\n`;
-                                numbersText += `📞 ${payment.number}\n`;
-                                if (index < matchedNumbers.length - 1) numbersText += '\n';
-                            }
-                        });
-                        
-                        // Use custom response template from payment-keywords config
-                        let responseMessage = methodConfig.response || '';
-                        
-                        // Replace placeholder if exists
-                        responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
-                        
-                        // If response doesn't have placeholder, append numbers at end
-                        if (!methodConfig.response.includes('{paymentNumbers}')) {
-                            responseMessage = responseMessage + '\n\n' + numbersText;
-                        }
-                        
-                        // Add footer with instructions
-                        responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
-                        
-                        await replyWithDelay(msg, responseMessage);
+                    // Find matching payment numbers for this method
+                    const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
+                        p.method.toLowerCase() === matchedMethod.toLowerCase()
+                    );
+                    
+                    if (matchedNumbers.length === 0) {
+                        await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
                         messageCounter.incrementCounter();
-                        console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
+                        return;
                     }
+                    
+                    let numbersText = '';
+                    
+                    // Format each matched payment number
+                    matchedNumbers.forEach((payment, index) => {
+                        if (payment.isBank) {
+                            numbersText += `🏦 *${payment.method}*\n`;
+                            numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
+                            numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
+                            numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
+                            numbersText += `📋 ধরন: ${payment.type}\n`;
+                            if (index < matchedNumbers.length - 1) numbersText += '\n';
+                        } else {
+                            numbersText += `📱 *${payment.method}* (${payment.type})\n`;
+                            numbersText += `📞 ${payment.number}\n`;
+                            if (index < matchedNumbers.length - 1) numbersText += '\n';
+                        }
+                    });
+                    
+                    // Use custom response template from payment-keywords config
+                    let responseMessage = methodConfig.response || '';
+                    
+                    // Replace placeholder if exists
+                    responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
+                    
+                    // If response doesn't have placeholder, append numbers at end
+                    if (!methodConfig.response.includes('{paymentNumbers}')) {
+                        responseMessage = responseMessage + '\n\n' + numbersText;
+                    }
+                    
+                    // Add footer with instructions
+                    responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
+                    
+                    await replyWithDelay(msg, responseMessage);
+                    messageCounter.incrementCounter();
+                    console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
                 } catch (error) {
                     console.error('[PAYMENT-INFO ERROR]', error);
                     await replyWithDelay(msg, '❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
@@ -532,6 +518,23 @@ client.on('message', async (msg) => {
         // Admin approval: done, ok, do, dn, yes, অক, okey, ওকে (for diamond orders)
         const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
         if (approvalKeywords.includes(msg.body.toLowerCase().trim()) && isGroup) {
+            
+            // ❌ SECURITY: Block removed admins FIRST before auto-registering
+            const REMOVED_ADMINS = ['8801721016186'];
+            const phoneMatch = (msg.author || fromUserId).match(/^(\d+)/);
+            const adminPhone = phoneMatch ? phoneMatch[1] : (msg.author || fromUserId);
+            
+            if (REMOVED_ADMINS.includes(adminPhone)) {
+                console.log(`[APPROVAL] ❌ BLOCKED: Removed admin ${adminPhone} attempted approval`);
+                await replyWithDelay(msg, '❌ Your admin access has been revoked. You cannot approve orders.');
+                messageCounter.incrementCounter();
+                return;
+            }
+            
+            // 🤖 Auto-register new admins when they send approval commands
+            const userName = msg._data?.notifyName || msg.author || fromUserId;
+            autoRegisterAdmin(msg.author || fromUserId, userName);
+            
             // 🔍 Better admin check - try multiple ID formats
             let isAdminForApproval = isAdminUser;
             
@@ -553,12 +556,12 @@ client.on('message', async (msg) => {
             console.log(`[APPROVAL DEBUG] isAdminUser: ${isAdminUser}, isAdminForApproval: ${isAdminForApproval}`);
             if (adminInfo) console.log(`[APPROVAL DEBUG] Admin info: ${adminInfo.name} (${adminInfo.phone})`);
             
-            // Allow anyone to approve orders (admin check removed)
-            // if (!isAdminForApproval) {
-            //     await replyWithDelay(msg, '❌ Only admins can approve orders.');
-            //     messageCounter.incrementCounter();
-            //     return;
-            // }
+            if (!isAdminForApproval) {
+                await replyWithDelay(msg, '❌ Only admins can approve orders.');
+                messageCounter.incrementCounter();
+                return;
+            }
+
             if (!msg.hasQuotedMsg) {
                 await replyWithDelay(msg, '❌ Please reply to a user order to approve it.');
                 messageCounter.incrementCounter();
@@ -589,7 +592,25 @@ client.on('message', async (msg) => {
                         await replyWithDelay(msg, approvalResult.message);
                         messageCounter.incrementCounter();
                     }
-                    console.log(`[APPROVED] Multi-line diamond order: ${approvalResult.diamonds}💎 from ${approvalResult.userIdFromMsg} (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
+                    console.log(`[PROCESSING] Multi-line diamond order: ${approvalResult.diamonds}💎 from ${approvalResult.userIdFromMsg} (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
+                    
+                    // 🔄 Broadcast order status update to admin panel in real-time
+                    if (global.broadcastOrderStatusChange) {
+                        global.broadcastOrderStatusChange(
+                            approvalResult.orderId,
+                            'processing',
+                            `⏳ Order processing: ${approvalResult.diamonds}💎 from ${approvalResult.userName}`
+                        );
+                    }
+                    
+                    // Start auto-approval timer - create entry object from approvalResult
+                    const inMemoryEntry = {
+                        id: approvalResult.orderId,
+                        userId: approvalResult.userId,
+                        diamonds: approvalResult.diamonds,
+                        status: 'processing'
+                    };
+                    startAutoApprovalTimer(groupId, inMemoryEntry.id, inMemoryEntry, client);
                 }
                 return;
             } else {
@@ -611,13 +632,16 @@ client.on('message', async (msg) => {
             
             if (anyEntry && !pendingEntry) {
                 // Order exists but is already approved/completed
-                await replyWithDelay(msg, `⚠️ This order has already been approved by another admin.\n\n💎 Diamonds: ${anyEntry.diamonds}💎\n📊 Status: ${anyEntry.status.toUpperCase()}\n✓ Already handled`);
-                messageCounter.incrementCounter();
-                return;
+                // ⚠️ DISABLED: Allow multiple admins to process same order without warning
+                // await replyWithDelay(msg, `⚠️ This order has already been approved by another admin.\n\n💎 Diamonds: ${anyEntry.diamonds}💎\n📊 Status: ${anyEntry.status.toUpperCase()}\n✓ Already handled`);
+                // messageCounter.incrementCounter();
+                // return;
+                console.log(`[APPROVAL] Order already handled, but allowing re-processing (multiple admins)`);
             }
             
             if (pendingEntry) {
-                db.approveEntry(groupId, pendingEntry.id);
+                // Change status to 'processing' instead of 'approved'
+                db.setEntryProcessing(groupId, pendingEntry.id);
                 
                 // Get name from quoted message
                 let userName = quotedUserId;
@@ -646,13 +670,15 @@ client.on('message', async (msg) => {
                 
                 const totalValue = pendingEntry.diamonds * pendingEntry.rate;
                 
-                const approvalMsg = `✅ *Diamond Order Approved*\n\n` +
+                const approvalMsg = `⏳ *Diamond Order Processing*\n\n` +
                     `👤 User: ${userName}\n` +
                     `💎 Diamonds: ${pendingEntry.diamonds}💎\n` +
                     `💰 Amount Due: ৳${totalValue.toFixed(2)}\n` +
                     `📊 Rate: ৳${pendingEntry.rate.toFixed(2)}/💎\n\n` +
-                    `✓ Status: Approved\n` +
-                    `Order ID: ${pendingEntry.id}`;
+                    `⏱️ Status: Processing (2 min)\n` +
+                    `Order ID: ${pendingEntry.id}\n\n` +
+                    `✓ Will auto-approve in 2 minutes\n` +
+                    `📱 Delete this message to cancel`;
 
                 // Check if approve message is enabled
                 const diamondStatus = require('./config/database').getDiamondStatus?.() || JSON.parse(require('fs').readFileSync(require('path').join(__dirname, './config/diamond-status.json'), 'utf8'));
@@ -662,13 +688,148 @@ client.on('message', async (msg) => {
                     await replyWithDelay(msg, approvalMsg);
                     messageCounter.incrementCounter();
                 }
-                console.log(`[APPROVED] Order ID ${pendingEntry.id}: ${pendingEntry.diamonds}💎 from ${userName} (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
+                console.log(`[PROCESSING] Order ID ${pendingEntry.id}: ${pendingEntry.diamonds}💎 from ${userName} - Will auto-approve in 2 minutes (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
+                
+                // 🔄 Broadcast order status update to admin panel in real-time
+                if (global.broadcastOrderStatusChange) {
+                    global.broadcastOrderStatusChange(
+                        pendingEntry.id,
+                        'processing',
+                        `⏳ Order processing: ${pendingEntry.diamonds}💎 from ${userName}`
+                    );
+                }
+                
+                // Start auto-approval timer
+                startAutoApprovalTimer(groupId, pendingEntry.id, pendingEntry, client);
             } else {
-                await replyWithDelay(msg, '❌ No pending diamond order found for this user.');
-                messageCounter.incrementCounter();
+                // ⚠️ DISABLED: Don't show error when no pending order found (silently ignore)
+                // await replyWithDelay(msg, '❌ No pending diamond order found for this user.');
+                // messageCounter.incrementCounter();
+                console.log(`[APPROVAL] No pending order for user, silently skipping`);
             }
             
             return;
+        }
+
+        // ⚠️ ADMIN CORRECTION: When admin quotes a PROCESSING order and sends correction
+        // Keywords: vul (wrong), mistake, correction, cancel, wrong number, remove, stop, delete, etc.
+        if (msg.hasQuotedMsg && isGroup) {
+            const correctionKeywords = ['vul', 'mistake', 'correction', 'cancel', 'wrong', 'remove', 'stop', 'delete', 'mistake hoise', 'vul number', 'wrong number', 'vull number', 'vull', 'ভুল নাম্বার', 'ভুল', 'নাম্বার ভুল', 'number vul'];
+            const bodyLower = msg.body.toLowerCase().trim();
+            const hasCorrection = correctionKeywords.some(kw => bodyLower.includes(kw));
+
+            if (hasCorrection) {
+                // Check if admin
+                let isAdminForCorrection = isAdminUser;
+                if (!isAdminForCorrection && msg.author) {
+                    isAdminForCorrection = isAdminByAnyVariant(msg.author);
+                }
+
+                if (isAdminForCorrection) {
+                    try {
+                        const quotedMsg = await msg.getQuotedMessage();
+                        const quotedUserId = quotedMsg.author || quotedMsg.from;
+                        
+                        console.log(`[CORRECTION] Admin (${msg.author}) sent correction for order`);
+                        console.log(`[CORRECTION] Quoted user: ${quotedUserId}, Group: ${groupId}`);
+                        console.log(`[CORRECTION] Message: "${msg.body}"`);
+
+                        // ✅ Load database ONCE to ensure consistency
+                        const currentDatabase = db.loadDatabase();
+                        const groupData = currentDatabase.groups[groupId];
+                        if (!groupData || !groupData.entries) {
+                            console.log(`[CORRECTION] Group not found`);
+                            return;
+                        }
+
+                        // Find PROCESSING order for this user (most recent)
+                        let processingOrder = null;
+                        for (let i = groupData.entries.length - 1; i >= 0; i--) {
+                            const entry = groupData.entries[i];
+                            if (entry.userId === quotedUserId && entry.status === 'processing') {
+                                processingOrder = entry;
+                                console.log(`[CORRECTION] Found PROCESSING order: ${entry.id}`);
+                                break;
+                            }
+                        }
+
+                        if (processingOrder) {
+                            // ✅ Cancel the auto-approval timer
+                            cancelAutoApprovalTimer(groupId, processingOrder.id);
+                            console.log(`[CORRECTION] Cancelled auto-approval timer for order ${processingOrder.id}`);
+
+                            // ✅ Update status to 'deleted' in the loaded database
+                            processingOrder.status = 'deleted';
+                            processingOrder.deletedAt = new Date().toISOString();
+                            processingOrder.deletedBy = 'admin-correction';
+                            processingOrder.correctionReason = msg.body;
+                            
+                            // ✅ Save the database with the updated entry
+                            db.saveDatabase(currentDatabase);
+                            console.log(`[CORRECTION] Order ${processingOrder.id} marked as DELETED and saved to database`);
+                            console.log(`[CORRECTION] Database file updated: status=${processingOrder.status}, deletedAt=${processingOrder.deletedAt}`);
+
+                            // ✅ Check if delete message edit is disabled
+                            let shouldSendDeleteMessage = true;
+                            try {
+                                const statusData = await fs.readFile(path.join(__dirname, 'config/diamond-status.json'), 'utf8');
+                                const status = JSON.parse(statusData);
+                                if (status.disableDeleteMessageEdit) {
+                                    shouldSendDeleteMessage = false;
+                                    console.log('[CORRECTION] Delete message edit is DISABLED - not sending message');
+                                }
+                            } catch (e) {
+                                console.log('[CORRECTION] Could not read settings, sending message by default');
+                            }
+
+                            // ✅ Send confirmation to group (only if enabled)
+                            if (shouldSendDeleteMessage) {
+                                const confirmMsg = `✅ *Order Cancelled*\n\n` +
+                                    `🗑️ Order ID: ${processingOrder.id}\n` +
+                                    `💎 Diamonds: ${processingOrder.diamonds}💎\n` +
+                                    `👤 User: ${processingOrder.userName}\n\n` +
+                                    `📝 Admin Reason: ${msg.body}\n` +
+                                    `⏹️ Status: DELETED (Correction applied)`;
+                                
+                                await replyWithDelay(msg, confirmMsg);
+                                console.log(`[CORRECTION] Confirmation sent to group`);
+                            } else {
+                                console.log('[CORRECTION] Order deleted silently (no message sent)');
+                            }
+
+                            // ✅ Notify admin panel
+                            try {
+                                const controller = new AbortController();
+                                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                                
+                                await fetch('http://localhost:3005/api/order-event', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        type: 'order-deleted',
+                                        reason: 'admin-correction',
+                                        groupId: groupId,
+                                        orderId: processingOrder.id,
+                                        entry: processingOrder,
+                                        adminMessage: msg.body,
+                                        message: `🗑️ Order ${processingOrder.id} cancelled by admin (Correction: ${msg.body})`
+                                    }),
+                                    signal: controller.signal
+                                }).catch(e => console.log('[CORRECTION] Admin panel notified'));
+                                
+                                clearTimeout(timeoutId);
+                            } catch (notifyErr) {
+                                console.log('[CORRECTION] Admin panel notification failed (expected if offline)');
+                            }
+
+                            messageCounter.incrementCounter();
+                            return;
+                        }
+                    } catch (correctionErr) {
+                        console.error('[CORRECTION] Error handling correction:', correctionErr.message);
+                    }
+                }
+            }
         }
         
         // Admin payment receipt: amount//rcv (e.g., 100//rcv)
@@ -944,36 +1105,29 @@ client.on('message', async (msg) => {
 // তখন admin panel থেকেও অটোমেটিক সেই order ডিলিট হয়ে যাবে
 client.on('message_revoke', async (after, before) => {
     try {
-        // এই handler শুধুমাত্র ডায়মন্ড অর্ডার মেসেজ ডিলিট হওয়ার সময় কাজ করে
-        // যখন ইউজার "Delete for Everyone" করে, তখন এই event ট্রিগার হয়
+        console.log(`[DELETE EVENT] ========================================`);
+        console.log(`[DELETE EVENT] MESSAGE REVOKE DETECTED!`);
+        console.log(`[DELETE EVENT] Before object keys:`, Object.keys(before || {}));
+        console.log(`[DELETE EVENT] Before object:`, JSON.stringify(before, null, 2));
+        console.log(`[DELETE EVENT] ========================================`);
         
-        console.log(`[DELETE EVENT] Message revoke detected! Message: "${before?.body}"`);
-        
-        if (!before) return; // কোন পূর্ববর্তী মেসেজ স্টেট না থাকলে রিটার্ন করো
-        
-        const messageBody = before.body?.trim() || '';
-        const fromUserId = before.from;
-        
-        console.log(`[DELETE EVENT] Checking message - Body: "${messageBody}", From: ${fromUserId}`);
-        
-        // শুধুমাত্র ডায়মন্ড অর্ডার মেসেজ প্রসেস করো - আরো সহজ ম্যাচিং
-        // যেকোনো সংখ্যা ধারণ করা মেসেজ (ডায়মন্ড অর্ডার হতে পারে)
-        const numberMatch = messageBody.match(/\d+/);
-        if (!numberMatch) {
-            console.log(`[DELETE EVENT] Not a diamond order message, ignoring`);
+        if (!before) {
+            console.log(`[DELETE EVENT] No 'before' object found, returning`);
             return;
         }
         
-        // শুধুমাত্র গ্রুপ মেসেজ প্রসেস করো, ডিরেক্ট মেসেজ না
+        const messageBody = before.body?.trim() || '';
+        const fromUserId = before.from;
+        const msgFrom = before.author || fromUserId;
+        
+        console.log(`[DELETE EVENT] Checking message - Body: "${messageBody}", From: ${fromUserId}, Author: ${msgFrom}`);
+        
+        // শুধুমাত্র গ্রুপ মেসেজ প্রসেস করো
         if (!fromUserId || !fromUserId.includes('@g.us')) {
             console.log(`[DELETE EVENT] Not a group message, ignoring`);
             return;
         }
         
-        const diamondAmount = parseInt(numberMatch[0]);
-        console.log(`[DELETE EVENT] ✅ Processing delete - Amount: ${diamondAmount}💎, Group: ${fromUserId}`);
-        
-        // ডাটাবেস থেকে ম্যাচিং অর্ডার খুঁজে বের করে ডিলিট করো
         const database = db.loadDatabase();
         const groupData = database.groups[fromUserId];
         
@@ -982,49 +1136,188 @@ client.on('message_revoke', async (after, before) => {
             return;
         }
         
-        // সবচেয়ে সাম্প্রতিক pending order খুঁজো যা এই ইউজারের এবং ডায়মন্ড সংখ্যা ম্যাচ করে
+        // Check 1: Detect deleted "done" approval message (admin's approval)
+        // The message will contain "Processing" or mention the order approval
+        if (messageBody.includes('Processing') || messageBody.includes('Order')) {
+            console.log(`[DELETE EVENT] 🔍 Detected potential approval message deletion`);
+            
+            // Look for the most recent order in "processing" or "approved" state
+            let processingOrder = null;
+            for (let i = groupData.entries.length - 1; i >= 0; i--) {
+                const entry = groupData.entries[i];
+                if ((entry.status === 'processing' || entry.status === 'approved') && entry.processingStartedAt) {
+                    // Check if this order was recently approved (within 5 minutes)
+                    const approvalTime = new Date(entry.processingStartedAt).getTime();
+                    const now = Date.now();
+                    if (now - approvalTime < 5 * 60 * 1000) {
+                        processingOrder = entry;
+                        console.log(`[DELETE EVENT] ✅ Found processing order: ${entry.id}`);
+                        break;
+                    }
+                }
+            }
+            
+            if (processingOrder) {
+                console.log(`[DELETE EVENT] ⏸️ Admin deleted approval message - Cancelling Order ${processingOrder.id}`);
+                
+                // Cancel the auto-approval timer
+                cancelAutoApprovalTimer(fromUserId, processingOrder.id);
+                
+                // Change status back to 'pending' with cancellation note
+                processingOrder.status = 'pending';
+                processingOrder.cancelledByAdmin = true;
+                processingOrder.cancelledAt = new Date().toISOString();
+                processingOrder.cancelReason = 'Admin deleted approval message';
+                delete processingOrder.processingStartedAt;
+                delete processingOrder.processingTimeout;
+                
+                db.saveDatabase(database);
+                
+                // Check if delete message edit is disabled
+                let shouldSendCancelMsg = true;
+                try {
+                    const statusData = await fs.readFile(path.join(__dirname, 'config/diamond-status.json'), 'utf8');
+                    const status = JSON.parse(statusData);
+                    if (status.disableDeleteMessageEdit) {
+                        shouldSendCancelMsg = false;
+                        console.log('[DELETE EVENT] Delete message edit is DISABLED - not sending message');
+                    }
+                } catch (e) {
+                    console.log('[DELETE EVENT] Could not read settings, sending message by default');
+                }
+                
+                // Notify users about cancellation (only if enabled)
+                if (shouldSendCancelMsg) {
+                    const cancelMsg = `❌ *Order CANCELLED*\n\n` +
+                        `💎 Order ID: ${processingOrder.id}\n` +
+                        `💎 Diamonds: ${processingOrder.diamonds}💎\n` +
+                        `👤 User: ${processingOrder.userName}\n\n` +
+                        `📋 Reason: Admin cancelled the approval\n` +
+                        `⏸️ Status: Back to Pending`;
+                    
+                    try {
+                        await client.sendMessage(fromUserId, cancelMsg);
+                        console.log(`[DELETE EVENT] Cancel message sent to group`);
+                    } catch (sendErr) {
+                        console.error(`[DELETE EVENT] Failed to send cancel message:`, sendErr.message);
+                    }
+                } else {
+                    console.log('[DELETE EVENT] Order cancelled silently (no message sent)');
+                }
+
+                // Notify admin panel via HTTP with correct port (3005)
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
+                    await fetch('http://localhost:3005/api/order-event', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'order-cancelled',
+                            reason: 'admin-deleted-approval',
+                            groupId: fromUserId,
+                            orderId: processingOrder.id,
+                            entry: processingOrder,
+                            message: `❌ Order ${processingOrder.id} cancelled by admin`
+                        }),
+                        signal: controller.signal
+                    }).catch(e => console.log('[DELETE EVENT] Admin notification sent to port 3005'));
+                    
+                    clearTimeout(timeoutId);
+                } catch (notifyErr) {
+                    console.error('[DELETE EVENT] Failed to notify admin panel:', notifyErr.message);
+                }
+                
+                return;
+            }
+        }
+        
+        // Check 2: Detect deleted user order message
+        const numberMatch = messageBody.match(/\d+/);
+        if (!numberMatch) {
+            console.log(`[DELETE EVENT] Not a diamond order message (no digits found), ignoring - Body: "${messageBody}"`);
+            return;
+        }
+        
+        const diamondAmount = parseInt(numberMatch[0]);
+        
+        // Get the actual message author (the user who sent the order, not the group)
+        // For group messages, author is in "before.author"
+        const actualUserId = before.author || before.from;
+        
+        console.log(`[DELETE EVENT] ✅ Processing user delete - Amount: ${diamondAmount}💎, Group: ${fromUserId}, User: ${actualUserId}`);
+        console.log(`[DELETE EVENT] Searching for entry with userId: ${actualUserId}, diamonds: ${diamondAmount}, status: pending or processing`);
+        console.log(`[DELETE EVENT] Total entries in database: ${groupData.entries.length}`);
+        
+        // Find and mark as deleted - user deleting their own order
         let deletedEntry = null;
-        let deletedIndex = -1;
         
         for (let i = groupData.entries.length - 1; i >= 0; i--) {
             const entry = groupData.entries[i];
+            console.log(`[DELETE EVENT] Checking entry ${i}: id=${entry.id}, userId=${entry.userId}, diamonds=${entry.diamonds}, status=${entry.status}`);
             
-            // চেক: pending স্ট্যাটাস, একই ইউজার, এবং ডায়মন্ড সংখ্যা ম্যাচ করে
-            if (entry.status === 'pending' && 
-                entry.userId === fromUserId && 
+            // Check for pending OR processing status (processing = admin approved but not yet auto-approved)
+            if ((entry.status === 'pending' || entry.status === 'processing') && 
+                entry.userId === actualUserId && 
                 entry.diamonds === diamondAmount) {
                 
-                // Entry delete না করে শুধু status "deleted" করে দাও
+                console.log(`[DELETE EVENT] ✅ MATCH FOUND! Entry ${entry.id}`);
+                
+                // If was in processing, cancel the auto-approval timer
+                if (entry.status === 'processing') {
+                    const { cancelAutoApprovalTimer } = require('./utils/auto-approval');
+                    cancelAutoApprovalTimer(fromUserId, entry.id);
+                    console.log(`[DELETE EVENT] ⏹️ Cancelled auto-approval timer for processing order ${entry.id}`);
+                }
+                
                 entry.status = 'deleted';
                 entry.deletedAt = new Date().toISOString();
                 entry.deletedBy = 'user';
                 deletedEntry = entry;
-                deletedIndex = i;
                 console.log(`[DELETE EVENT] ✅ Order status changed to deleted: ${deletedEntry.diamonds}💎 from ${deletedEntry.userId}`);
                 break;
             }
         }
         
+        if (!deletedEntry) {
+            console.log(`[DELETE EVENT] ❌ NO MATCHING ENTRY FOUND for amount=${diamondAmount}, userId=${actualUserId}`);
+        }
+        
         if (deletedEntry) {
-            // আপডেটেড ডাটাবেস সেভ করো
             db.saveDatabase(database);
             console.log(`[DELETE EVENT] Database saved`);
+            console.log(`[DELETE EVENT] 📤 Sending deletion notification to admin panel...`);
             
-            // Admin panel কে নোটিফিকেশন পাঠাও
             try {
-                await fetch('http://localhost:3000/api/order-event', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'order-deleted',
-                        reason: 'user-delete',
-                        groupId: fromUserId,
-                        entry: deletedEntry,
-                        message: `🗑️ অর্ডার ${deletedEntry.diamonds}💎 ইউজার ডিলিট করেছে`
-                    })
-                }).catch(e => console.log('[DELETE EVENT] Admin panel notification failed (offline)'));
+                // Send notification immediately (don't wait)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                // Use async IIFE to send without blocking
+                (async () => {
+                    try {
+                        const response = await fetch('http://localhost:3005/api/order-event', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                type: 'order-deleted',
+                                reason: 'user-delete',
+                                groupId: fromUserId,
+                                entry: deletedEntry,
+                                message: `🗑️ অর্ডার ${deletedEntry.diamonds}💎 ইউজার ডিলিট করেছে`
+                            }),
+                            signal: controller.signal
+                        });
+                        clearTimeout(timeoutId);
+                        console.log(`[DELETE EVENT] ✅ Admin panel notified (HTTP ${response.status})`);
+                    } catch (e) {
+                        clearTimeout(timeoutId);
+                        console.log(`[DELETE EVENT] ℹ️ Admin panel notification sent (error expected if panel offline)`);
+                    }
+                })();
             } catch (notifyError) {
-                console.log('[DELETE EVENT] Admin panel কে নোটিফাই করতে পারছি না:', notifyError.message);
+                console.log('[DELETE EVENT] Admin panel notify error:', notifyError.message);
             }
         } else {
             console.log(`[DELETE EVENT] No matching pending order found`);
@@ -1156,19 +1449,27 @@ async function startDeletedMessageChecker(client) {
             for (const [groupId, groupData] of Object.entries(database.groups)) {
                 if (!groupData.entries || !Array.isArray(groupData.entries)) continue;
                 
-                // সব pending orders চেক করো
+                // সব pending এবং processing orders চেক করো
                 for (let i = groupData.entries.length - 1; i >= 0; i--) {
                     const entry = groupData.entries[i];
                     
-                    // pending status এর orders চেক করো
-                    if (entry.status === 'pending' && entry.messageId) {
+                    // pending বা processing status এর orders চেক করো
+                    if ((entry.status === 'pending' || entry.status === 'processing') && entry.messageId) {
                         try {
                             // চেষ্টা করো মেসেজ খুঁজে বের করতে
                             const message = await client.getMessageById(entry.messageId);
                             
                             if (!message || !message.id) {
                                 // মেসেজ আর নেই - ডিলিট হয়েছে
-                                console.log(`[AUTO-CHECK] ✅ Detected deleted message: ${entry.diamonds}💎 from ${entry.userId}`);
+                                console.log(`[AUTO-CHECK] ✅ Detected deleted message: ${entry.diamonds}💎 from ${entry.userId} (status: ${entry.status})`);
+                                
+                                // If processing, cancel the auto-approval timer first
+                                if (entry.status === 'processing') {
+                                    const { cancelAutoApprovalTimer } = require('./utils/auto-approval');
+                                    cancelAutoApprovalTimer(groupId, entry.id);
+                                    console.log(`[AUTO-CHECK] ⏹️ Cancelled auto-approval timer for order ${entry.id}`);
+                                }
+                                
                                 // Entry delete না করে status "deleted" করে দাও
                                 entry.status = 'deleted';
                                 entry.deletedAt = new Date().toISOString();
@@ -1193,7 +1494,15 @@ async function startDeletedMessageChecker(client) {
                         } catch (e) {
                             // মেসেজ আর এক্সেসযোগ্য না হলে status "deleted" করো
                             if (e.message && e.message.includes('not found')) {
-                                console.log(`[AUTO-CHECK] ✅ Message not found - marking as deleted: ${entry.diamonds}💎`);
+                                console.log(`[AUTO-CHECK] ✅ Message not found - marking as deleted: ${entry.diamonds}💎 (status: ${entry.status})`);
+                                
+                                // If processing, cancel the timer
+                                if (entry.status === 'processing') {
+                                    const { cancelAutoApprovalTimer } = require('./utils/auto-approval');
+                                    cancelAutoApprovalTimer(groupId, entry.id);
+                                    console.log(`[AUTO-CHECK] ⏹️ Cancelled auto-approval timer for order ${entry.id}`);
+                                }
+                                
                                 entry.status = 'deleted';
                                 entry.deletedAt = new Date().toISOString();
                                 entry.deletedBy = 'user';
@@ -1453,6 +1762,7 @@ server.on('error', (error) => {
 
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully...');
+    cancelAllTimers();
     server.close(() => {
         console.log('Server closed');
         process.exit(0);
@@ -1461,6 +1771,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully...');
+    cancelAllTimers();
     server.close(() => {
         console.log('Server closed');
         process.exit(0);

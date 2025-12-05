@@ -218,8 +218,8 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
             return false;
         }
 
-        if (diamonds > 10000) {
-            await msg.reply('❌ Diamond amount too large. Maximum is 10,000 diamonds.');
+        if (diamonds > 100000) {
+            await msg.reply('❌ Diamond amount too large. Maximum is 100,000 diamonds.');
             return false;
         }
 
@@ -330,8 +330,8 @@ async function handleDiamondRequest(msg, userId, userName, groupId, diamonds, gr
             return false;
         }
 
-        if (diamonds > 10000) {
-            await msg.reply('❌ Diamond amount too large. Maximum is 10,000 diamonds.');
+        if (diamonds > 100000) {
+            await msg.reply('❌ Diamond amount too large. Maximum is 100,000 diamonds.');
             return false;
         }
 

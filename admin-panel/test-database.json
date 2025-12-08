@@ -1,0 +1,58 @@
+{
+  "groups": {
+    "120363405821339800@g.us": {
+      "groupId": "120363405821339800@g.us",
+      "entries": [
+        {
+          "id": 1764227044653,
+          "userId": "115930327715989@lid",
+          "userName": "Reza Khan",
+          "diamonds": 1000,
+          "rate": 2.9,
+          "status": "approved",
+          "createdAt": "2025-11-27T07:04:04.653Z",
+          "messageId": "false_120363405821339800@g.us_ACE60B84AEA57E144B0D4DA1F816AA4C_115930327715989@lid",
+          "approvedAt": "2025-11-27T07:05:05.618Z"
+        },
+        {
+          "id": 1764227044654,
+          "userId": "117830327715990@lid",
+          "userName": "Ali Ahmed",
+          "diamonds": 500,
+          "rate": 2.9,
+          "status": "pending",
+          "createdAt": "2025-11-27T08:10:00.000Z"
+        },
+        {
+          "id": 1764227044655,
+          "userId": "118830327715991@lid",
+          "userName": "Karim Hassan",
+          "diamonds": 2000,
+          "rate": 2.9,
+          "status": "pending",
+          "createdAt": "2025-11-27T08:15:30.000Z"
+        }
+      ],
+      "rate": 2.9,
+      "groupName": "Bot making",
+      "dueLimit": 20000
+    },
+    "120363405821340900@g.us": {
+      "groupId": "120363405821340900@g.us",
+      "entries": [
+        {
+          "id": 1764227044656,
+          "userId": "119830327715992@lid",
+          "userName": "Fatima Akter",
+          "diamonds": 1500,
+          "rate": 3.5,
+          "status": "pending",
+          "createdAt": "2025-11-27T08:20:00.000Z"
+        }
+      ],
+      "rate": 3.5,
+      "groupName": "Gaming Hub",
+      "dueLimit": 15000
+    }
+  }
+}

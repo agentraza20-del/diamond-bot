@@ -1,0 +1,20 @@
+{
+  "methods": {
+    "Bkash": {
+      "keywords": ["bkash", "বিকাশ", "bk"],
+      "response": "📱 *Bkash Payment*\n\n",
+      "enabled": true
+    },
+    "Nagad": {
+      "keywords": ["nagad", "নগদ", "ng"],
+      "response": "📱 *Nagad Payment*\n\n",
+      "enabled": true
+    },
+    "Rocket": {
+      "keywords": ["rocket", "রকেট", "rk"],
+      "response": "📱 *Rocket Payment*\n\n",
+      "enabled": true
+    }
+  },
+  "lastUpdated": "2025-11-30T00:00:00.000Z"
+}

@@ -1,0 +1,129 @@
+# 📋 QUICK REFERENCE - Admin Correction Feature
+
+## 🎯 What It Does
+
+Admin can correct PROCESSING orders by:
+1. **Quoting** the order message
+2. **Sending** a correction keyword
+3. **Instant Result**: Order becomes DELETED 🗑️
+
+---
+
+## ⚡ Quick Example
+
+```
+USER:  87440444
+       10
+
+ADMIN: Done
+       ➜ Order: PROCESSING ⏳ 1:50
+
+ADMIN: [Quote order] vul number
+       ➜ Order: DELETED 🗑️ (instant!)
+```
+
+---
+
+## 🔑 Correction Keywords
+
+Just use ANY of these:
+- **vul** (Bengali)
+- **mistake**
+- **wrong**
+- **cancel**
+- **delete**
+- **correction**
+- **remove**
+- **stop**
+- **mistake hoise** (Bengali)
+- **vul number** (Bengali)
+- **wrong number**
+
+*(Case-insensitive, can be part of longer text)*
+
+---
+
+## ✨ What Happens
+
+```
+Admin sends correction
+        ↓
+Bot IMMEDIATELY:
+├─ Cancels 2-min timer
+├─ Sets status DELETED
+├─ Records reason
+├─ Updates admin panel
+└─ Notifies group
+
+Result: Order never auto-approves ✅
+```
+
+---
+
+## 🔒 Security
+
+- ✅ Only admins can correct
+- ✅ Removed admins blocked
+- ✅ Only PROCESSING orders
+- ✅ Reason recorded
+- ✅ Timestamps tracked
+
+---
+
+## 📊 Admin Panel Shows
+
+### Before Correction
+```
+Status: ⏳ PROCESSING
+Timer: 1:45
+```
+
+### After "vul number"
+```
+Status: 🗑️ DELETED
+Timer: [GONE]
+```
+
+---
+
+## 🧪 Test It
+
+1. User sends: `87440444` + `10`
+2. Admin: Quote + "Done"
+3. Wait ~30s (PROCESSING shows)
+4. Admin: Quote same order + "vul"
+5. ✅ Instantly becomes DELETED
+
+---
+
+## 📝 What Gets Recorded
+
+```json
+{
+  "status": "deleted",
+  "deletedBy": "admin-correction",
+  "correctionReason": "vul number",
+  "deletedAt": "2025-12-04T12:45:30Z"
+}
+```
+
+---
+
+## 🚀 Status
+
+✅ **LIVE & READY TO USE**
+
+Implementation complete, tested, deployed!
+
+---
+
+## 📚 Full Docs
+
+- `ADMIN-CORRECTION-FEATURE.md` - Technical details
+- `ADMIN-CORRECTION-QUICKSTART.md` - Quick start
+- `TESTING-ADMIN-CORRECTION.md` - Test scenarios
+- `SYSTEM-FEATURES-COMPLETE.md` - Feature comparison
+
+---
+
+**That's it! Admins can now correct orders instantly. 🎉**

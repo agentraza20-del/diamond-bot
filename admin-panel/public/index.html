@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Diamond Bot - Admin Panel</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Check authentication on page load
+        if (!localStorage.getItem('adminLoggedIn') && !sessionStorage.getItem('adminLoggedIn')) {
+            window.location.href = '/login';
+        }
+    </script>
+</head>
+<body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar">
+        <div class="navbar-brand">
+            <i class="fas fa-gem"></i>
+            <span>Diamond Bot Admin</span>
+        </div>
+        <div class="navbar-actions">
+            <button class="icon-btn" id="themeToggle">
+                <i class="fas fa-moon"></i>
+            </button>
+            <button class="icon-btn" id="notificationBtn">
+                <i class="fas fa-bell"></i>
+                <span class="badge" id="notifBadge">0</span>
+            </button>
+            <button class="icon-btn" id="langToggle">
+                <i class="fas fa-language"></i>
+            </button>
+            <button class="icon-btn" id="logoutBtn" onclick="logout()" title="Logout">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Background Auto-Refresh Indicator -->
+    <div class="bg-refresh-indicator" id="bgRefreshIndicator">
+        <div class="bg-refresh-spinner"></div>
+        <span class="bg-refresh-text">Updating...</span>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+        <!-- Home View -->
+        <div class="view active" id="homeView">
+            <div class="view-header">
+                <h1><i class="fas fa-home"></i> Home</h1>
+                <button class="btn-refresh" onclick="refreshDiamondStatus()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+
+            <!-- Diamond Request Status Card -->
+            <div class="section">
+                <h2><i class="fas fa-gem"></i> Diamond Request System</h2>
+                
+                <!-- Diamond Stock Card -->
+                <div class="diamond-stock-card" id="diamondStockCard">
+                    <div class="stock-info">
+                        <div class="stock-icon">
+                            <i class="fas fa-gem"></i>
+                        </div>
+                        <div class="stock-details">
+                            <p class="stock-label">💎 Stock Diamonds</p>
+                            <p class="stock-amount" id="stockAmount">10,000</p>
+                        </div>
+                    </div>
+                    <div class="stock-actions">
+                        <button class="btn-stock-edit" onclick="showEditStockModal()">
+                            <i class="fas fa-edit"></i> Set Stock
+                        </button>
+                    </div>
+                </div>
+
+                <!-- System Status Card -->
+                <div class="diamond-status-card" id="diamondStatusCard">
+                    <div class="status-display">
+                        <div class="status-badge" id="statusBadge">
+                            <i class="fas fa-check-circle"></i> ON
+                        </div>
+                        <div class="status-info">
+                            <p class="status-title">System Status</p>
+                            <p class="status-message" id="globalMessage">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="status-actions">
+                        <button class="btn-toggle" id="toggleSystemBtn" onclick="toggleDiamondSystem()">
+                            <i class="fas fa-power-off"></i> Toggle
+                        </button>
+                        <button class="btn-edit" onclick="showEditGlobalMessageModal()">
+                            <i class="fas fa-edit"></i> Edit Message
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Group Messages Section -->
+            <div class="section">
+                <h2><i class="fas fa-comments"></i> Group Messages</h2>
+                <div class="group-messages-list" id="groupMessagesList">
+                    <div class="loading-placeholder">
+                        <i class="fas fa-spinner fa-spin"></i> Loading groups...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto-Approval System Info -->
+            <div class="section">
+                <div class="info-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 10px;"><i class="fas fa-info-circle"></i> ⏳ Auto-Approval System</h3>
+                    <div style="font-size: 14px; line-height: 1.6;">
+                        <p><strong>কিভাবে কাজ করে:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 8px;">
+                            <li>✅ Admin "done" লিখলে → Order <span style="background: #4facfe; padding: 2px 8px; border-radius: 3px;">⏳ processing</span> হয়</li>
+                            <li>✅ 2 মিনিট পর → স্বয়ংক্রিয়ভাবে <span style="background: #43e97b; padding: 2px 8px; border-radius: 3px;">approved</span> হয়</li>
+                            <li>✅ যদি Admin message delete করে → Order <span style="background: #f5576c; padding: 2px 8px; border-radius: 3px;">cancelled</span> হয়</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard View -->
+        <div class="view" id="dashboardView">
+            <div class="view-header">
+                <h1><i class="fas fa-chart-line"></i> Dashboard</h1>
+                <button class="btn-refresh" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalUsers">0</h3>
+                        <p>Total Users</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalDeposits">৳0</h3>
+                        <p>Total Deposits</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #6ee7b7 100%);">
+                        <i class="fas fa-piggy-bank"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="fixedDeposits">৳0</h3>
+                        <p>Fixed Deposits</p>
+                    </div>
+                </div>
+
+                <div class="stat-card pending-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="stat-content pending-content">
+                        <p class="pending-label">Pending Orders</p>
+                        <div class="pending-values">
+                            <div class="pending-item">
+                                <span class="pending-value" id="pendingDiamonds">0</span>
+                                <span class="pending-metric">💎 Diamonds</span>
+                            </div>
+                            <div class="pending-divider"></div>
+                            <div class="pending-item">
+                                <span class="pending-value" id="pendingAmount">৳0</span>
+                                <span class="pending-metric">Amount</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                        <i class="fas fa-gem"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalOrders">0</h3>
+                        <p>Total Orders</p>
+                    </div>
+                </div>
+
+                <!-- Pending Orders Count Card -->
+                <div class="stat-card pending-orders-count-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #feca57 0%, #ff9800 100%);">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="pendingOrdersCount" style="font-size: 2.5em; font-weight: bold; color: #feca57;">0</h3>
+                        <p>Pending Orders</p>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;" id="pendingOrdersCountTime">Updated: Just now</p>
+                    </div>
+                </div>
+
+                <!-- Total Due Balance Card -->
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <i class="fas fa-credit-card"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalDueBalance">৳0</h3>
+                        <p>Total Due Balance</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Last Auto-Deduction -->
+            <div class="section">
+                <h2><i class="fas fa-bolt"></i> ⚡ Last Auto-Deduction</h2>
+                <div class="auto-deduct-list" id="autoDeductList">
+                    <div class="auto-deduct-placeholder">
+                        <i class="fas fa-info-circle"></i>
+                        <p>No auto-deductions yet</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section">
+                <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="showView('transactionsView')">
+                        <i class="fas fa-hourglass-half"></i>
+                        <span>Pending Deposits</span>
+                        <span class="action-badge" id="quickPendingCount">0</span>
+                    </button>
+                    <button class="action-btn" onclick="showBulkRateModal()">
+                        <i class="fas fa-tags"></i>
+                        <span>Bulk Rate Update</span>
+                    </button>
+                    <button class="action-btn" onclick="showView('groupsView')">
+                        <i class="fas fa-users-cog"></i>
+                        <span>Manage Groups</span>
+                    </button>
+                    <button class="action-btn" onclick="exportData()">
+                        <i class="fas fa-download"></i>
+                        <span>Export Data</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Analytics Chart -->
+            <div class="section">
+                <h2><i class="fas fa-chart-bar"></i> Last 5 Days Summary</h2>
+                <div class="chart-container">
+                    <canvas id="analyticsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="section">
+                <h2><i class="fas fa-history"></i> Recent Transactions (Manual Only)</h2>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Group Name</th>
+                                <th>Amount</th>
+                                <th>Type</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentTransactions">
+                            <tr><td colspan="4" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Groups View -->
+        <div class="view" id="groupsView">
+            <div class="view-header">
+                <h1><i class="fas fa-users"></i> Manage Groups</h1>
+                <div class="header-actions">
+                    <button class="btn-primary" onclick="showBulkRateModal()">
+                        <i class="fas fa-edit"></i> Bulk Rate Update
+                    </button>
+                    <button class="btn-primary" onclick="showDueReminderModal()" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); margin-left: 10px;">
+                        <i class="fas fa-bell"></i> Send Due Reminder
+                    </button>
+                </div>
+            </div>
+
+            <!-- Select & Calculate Section -->
+            <div class="section">
+                <h2><i class="fas fa-calculator"></i> Select Groups & Calculate Total Diamonds</h2>
+                <div class="select-calculate-container">
+                    <div class="select-actions">
+                        <button class="btn-secondary" onclick="selectAllGroups()">
+                            <i class="fas fa-check-square"></i> Select All
+                        </button>
+                        <button class="btn-secondary" onclick="deselectAllGroups()">
+                            <i class="fas fa-square"></i> Deselect All
+                        </button>
+                        <button class="btn-secondary" onclick="calculateSelectedDiamonds()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+                            <i class="fas fa-calculator"></i> Calculate Total
+                        </button>
+                    </div>
+                    
+                    <div class="calculation-result" id="calculationResult" style="display: none;">
+                        <div class="result-card">
+                            <h3>📊 Selected Groups Summary</h3>
+                            <div class="result-stats">
+                                <div class="result-stat">
+                                    <span class="result-label">Total Groups Selected:</span>
+                                    <span class="result-value" id="selectedGroupCount">0</span>
+                                </div>
+                                <div class="result-stat">
+                                    <span class="result-label">Total Diamonds:</span>
+                                    <span class="result-value diamond-highlight" id="totalDiamondsSelected">💎 0</span>
+                                </div>
+                                <div class="result-stat">
+                                    <span class="result-label">Total Amount:</span>
+                                    <span class="result-value amount-highlight" id="totalAmountSelected">৳0</span>
+                                </div>
+                                <div class="result-stat">
+                                    <span class="result-label">Total Paid:</span>
+                                    <span class="result-value" id="totalPaidSelected">৳0</span>
+                                </div>
+                                <div class="result-stat">
+                                    <span class="result-label">Total Due:</span>
+                                    <span class="result-value due-highlight" id="totalDueSelected">৳0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group Details Chart -->
+                        <div class="group-details-section">
+                            <h3>📈 Group-wise Performance Details</h3>
+                            <div class="tabs-group-details">
+                                <button class="tab-detail active" onclick="switchGroupDetailTab('today')">
+                                    <i class="fas fa-calendar-day"></i> Today
+                                </button>
+                                <button class="tab-detail" onclick="switchGroupDetailTab('yesterday')">
+                                    <i class="fas fa-calendar"></i> Yesterday
+                                </button>
+                                <button class="tab-detail" onclick="switchGroupDetailTab('weekly')">
+                                    <i class="fas fa-calendar-week"></i> Weekly
+                                </button>
+                                <button class="tab-detail" onclick="switchGroupDetailTab('monthly')">
+                                    <i class="fas fa-calendar-alt"></i> Monthly
+                                </button>
+                            </div>
+
+                            <div class="group-details-table">
+                                <table class="details-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Group Name</th>
+                                            <th>💎 Diamonds</th>
+                                            <th>💰 Amount (৳)</th>
+                                            <th>📊 Sales</th>
+                                            <th>📈 Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="groupDetailsTableBody">
+                                        <tr><td colspan="5" class="loading">Loading group details...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="groupSearch" placeholder="Search groups..." onkeyup="filterGroups()">
+            </div>
+
+            <!-- Groups Grid -->
+            <div class="groups-grid" id="groupsGrid">
+                <div class="loading-state">Loading groups...</div>
+            </div>
+        </div>
+
+        <!-- Orders View -->
+        <div class="view" id="ordersView">
+            <div class="view-header">
+                <h1><i class="fas fa-shopping-cart"></i> Orders</h1>
+                <button class="btn-refresh" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="orderSearchNew" placeholder="Search orders..." onkeyup="filterOrders()">
+            </div>
+
+            <!-- Order Status Tabs -->
+            <div class="tabs-orders">
+                <button class="tab-order active" onclick="switchOrderTab('all')">
+                    <i class="fas fa-list"></i> All
+                </button>
+                <button class="tab-order" onclick="switchOrderTab('pending')">
+                    <i class="fas fa-clock"></i> Pending
+                </button>
+                <button class="tab-order" onclick="switchOrderTab('processing')">
+                    <i class="fas fa-cog"></i> Processing
+                </button>
+                <button class="tab-order" onclick="switchOrderTab('approved')">
+                    <i class="fas fa-check-circle"></i> Approved
+                </button>
+            </div>
+
+            <!-- All Orders Tab -->
+            <div class="table-container tab-orders-content active" id="ordersTab-all">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Phone</th>
+                            <th>ID/Number</th>
+                            <th>Diamonds</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableNew">
+                        <tr><td colspan="8" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pending Orders Tab -->
+            <div class="table-container tab-orders-content" id="ordersTab-pending">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Phone</th>
+                            <th>ID/Number</th>
+                            <th>Diamonds</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTablePending"><tr><td colspan="8" class="loading">No pending orders found</td></tr></tbody>
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Processing Orders Tab -->
+            <div class="table-container tab-orders-content" id="ordersTab-processing">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Phone</th>
+                            <th>ID/Number</th>
+                            <th>Diamonds</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableProcessing"><tr><td colspan="8" class="loading">No processing orders found</td></tr></tbody>
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Approved Orders Tab -->
+            <div class="table-container tab-orders-content" id="ordersTab-approved">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Phone</th>
+                            <th>ID/Number</th>
+                            <th>Diamonds</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableApproved"><tr><td colspan="8" class="loading">No approved orders found</td></tr></tbody>
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div id="ordersPagination" class="pagination"></div>
+        </div>
+
+        <!-- Transactions View -->
+        <div class="view" id="transactionsView">
+            <div class="view-header">
+                <h1><i class="fas fa-money-bill-wave"></i> Transactions</h1>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('pending')">Pending</button>
+                    <button class="tab" onclick="switchTab('completed')">Completed</button>
+                </div>
+            </div>
+
+            <!-- Pending Deposits -->
+            <div class="tab-content active" id="pendingTab">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Phone</th>
+                                <th>Amount</th>
+                                <th>Transaction ID</th>
+                                <th>Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingDepositsTable">
+                            <tr><td colspan="5" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Completed Transactions -->
+            <div class="tab-content" id="completedTab">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="transactionSearch" placeholder="Search by group or ID..." onkeyup="filterTransactions()">
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Group Name</th>
+                                <th>Amount</th>
+                                <th>Method</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTable">
+                            <tr><td colspan="6" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- More View -->
+        <div class="view" id="moreView">
+            <div class="view-header">
+                <h1><i class="fas fa-ellipsis-h"></i> More</h1>
+            </div>
+
+            <!-- Menu Grid -->
+            <div class="menu-grid">
+                <div class="menu-item" onclick="showView('transactionsView')">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <span>Money</span>
+                </div>
+                <div class="menu-item" onclick="showUsersModal()">
+                    <i class="fas fa-user-friends"></i>
+                    <span>User Management</span>
+                </div>
+                <div class="menu-item" onclick="showPaymentNumbersModal()">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Payment Numbers</span>
+                </div>
+                <div class="menu-item" onclick="showWhatsAppAdminModal()" style="border-color: #25d366; background: rgba(37, 211, 102, 0.05);">
+                    <i class="fas fa-user-shield" style="color: #25d366;"></i>
+                    <span style="color: #25d366; font-weight: 600;">WhatsApp Admins</span>
+                </div>
+                <div class="menu-item" onclick="showAdminLogsModal()">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Admin Logs</span>
+                </div>
+                <div class="menu-item" onclick="showAnalyticsModal()">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Advanced Analytics</span>
+                </div>
+                <div class="menu-item" onclick="showSettingsModal()">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </div>
+                <div class="menu-item" onclick="showChangeCredentialsModal()" style="border-color: #667eea; background: rgba(102, 126, 234, 0.05);">
+                    <i class="fas fa-lock" style="color: #667eea;"></i>
+                    <span style="color: #667eea; font-weight: 600;">Change Credentials</span>
+                </div>
+                <div class="menu-item" onclick="showApproveMessageModal()" id="approveMessageMenu">
+                    <i class="fas fa-bell"></i>
+                    <span>Approve Messages</span>
+                </div>
+                <div class="menu-item" onclick="toggleDeleteMessageMode()" id="deleteMessageToggleMenu" style="border-color: #feca57; background: rgba(254, 202, 87, 0.05);">
+                    <i class="fas fa-toggle-on" style="color: #feca57; font-size: 24px;"></i>
+                    <span id="deleteMessageToggleText" style="color: #feca57; font-weight: 600;">Delete Message: OFF</span>
+                </div>
+                <div class="menu-item" onclick="toggleAutoApprovalMessage()" id="autoApprovalMessageToggleMenu" style="border-color: #4facfe; background: rgba(79, 172, 254, 0.05);">
+                    <i class="fas fa-toggle-on" style="color: #4facfe; font-size: 24px;"></i>
+                    <span id="autoApprovalMessageToggleText" style="color: #4facfe; font-weight: 600;">Auto-Approve Message: ON</span>
+                </div>
+                <div class="menu-item" onclick="showCommandsModal()">
+                    <i class="fas fa-terminal"></i>
+                    <span>Command Management</span>
+                </div>
+                <div class="menu-item" onclick="event.preventDefault(); event.stopPropagation(); showPaymentKeywordsModal();">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Payment Keywords</span>
+                </div>
+                <div class="menu-item" onclick="exportAllData()">
+                    <i class="fas fa-file-export"></i>
+                    <span>Export All Data</span>
+                </div>
+                <div class="menu-item" onclick="showBackupModal()">
+                    <i class="fas fa-database"></i>
+                    <span>Backup & Restore</span>
+                </div>
+                <div class="menu-item" onclick="showOrderReconciliationModal()" style="border-color: #00d4ff; background: rgba(0, 212, 255, 0.05);">
+                    <i class="fas fa-search-plus" style="color: #00d4ff;"></i>
+                    <span style="color: #00d4ff; font-weight: 600;">Order Reconciliation</span>
+                </div>
+                <div class="menu-item" onclick="showClearDataModal()" style="border-color: #f5576c; background: rgba(245, 87, 108, 0.05);">
+                    <i class="fas fa-trash-alt" style="color: #f5576c;"></i>
+                    <span style="color: #f5576c; font-weight: 600;">Clear All Data</span>
+                </div>
+                <div class="menu-item" onclick="showBotConnectionModal()" id="botConnectionMenu">
+                    <i class="fas fa-robot" style="color: #4facfe;"></i>
+                    <span>Bot Connection</span>
+                </div>
+                <div class="menu-item" onclick="showAboutModal()">
+                    <i class="fas fa-info-circle"></i>
+                    <span>About</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="showView('homeView')">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </button>
+        <button class="nav-item" onclick="showView('dashboardView')">
+            <i class="fas fa-chart-line"></i>
+            <span>Dashboard</span>
+        </button>
+        <button class="nav-item" onclick="showView('groupsView')">
+            <i class="fas fa-users"></i>
+            <span>Groups</span>
+        </button>
+        <button class="nav-item" onclick="showView('ordersView')">
+            <i class="fas fa-shopping-cart"></i>
+            <span>Order</span>
+        </button>
+        <button class="nav-item" onclick="showView('moreView')">
+            <i class="fas fa-ellipsis-h"></i>
+            <span>More</span>
+        </button>
+    </nav>
+
+    <!-- Modals -->
+    <div id="modalContainer"></div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

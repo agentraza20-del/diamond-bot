@@ -1,0 +1,28 @@
+{
+  "primary": {
+    "phone": "+8801XXXXXXXXX",
+    "whatsappId": "8801XXXXXXXXX@c.us",
+    "status": "active",
+    "lastUsed": "2025-12-01T10:00:00.000Z",
+    "note": "Main WhatsApp number - currently active"
+  },
+  "backup": {
+    "phone": "+8801YYYYYYYYY",
+    "whatsappId": "8801YYYYYYYYY@c.us",
+    "status": "standby",
+    "lastUsed": null,
+    "note": "Backup number - ready to activate"
+  },
+  "current": "primary",
+  "history": [
+    {
+      "timestamp": "2025-12-01T10:00:00.000Z",
+      "action": "initialized",
+      "number": "primary"
+    }
+  ],
+  "instructions": {
+    "bangla": "প্রাইমারি নম্বর ban হলে 'node switch-to-backup.js' চালান",
+    "english": "If primary number gets banned, run 'node switch-to-backup.js'"
+  }
+}

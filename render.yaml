@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: diamond-bot
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node start-all.js
+    envVars:
+      - key: ADMIN_PORT
+        value: 3000
+      - key: BOT_PORT
+        value: 3001
+      - key: NODE_ENV
+        value: production

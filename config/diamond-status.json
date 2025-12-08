@@ -1,0 +1,18 @@
+{
+  "systemStatus": "on",
+  "approveMessageEnabled": false,
+  "globalMessage": "স্টক শেষ হয়ে গেছে। শীঘ্রই ফিরে আসবে। ধন্যবাদ!",
+  "adminDiamondStock": 114028,
+  "groupSettings": {},
+  "lastToggled": "2025-11-30T05:53:59.748Z",
+  "lastStockUpdate": "2025-12-08T10:39:44.950Z",
+  "lastStockDeduction": "2025-12-08T11:13:13.835Z",
+  "autoOffAt": "2025-11-27T13:33:46.909Z",
+  "lastSettingUpdate": "2025-12-04T09:27:23.149Z",
+  "disableDeleteMessageEdit": true,
+  "lastDeleteMessageSettingUpdate": "2025-12-06T14:45:57.637Z",
+  "disableAutoApprovalMessage": true,
+  "lastAutoApprovalMessageSettingUpdate": "2025-12-04T09:36:24.756Z",
+  "disableMissingOrderDetection": false,
+  "lastMissingOrderSettingUpdate": "2025-12-07T19:01:52.453Z"
+}

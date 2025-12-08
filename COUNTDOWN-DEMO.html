@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Processing Order Countdown - Demo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #4facfe;
+        }
+        
+        .demo-section {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .demo-section h2 {
+            color: #4facfe;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        
+        .orders-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .orders-table th {
+            background: #0f3460;
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #2d3561;
+        }
+        
+        .orders-table td {
+            padding: 12px;
+            border: 1px solid #2d3561;
+        }
+        
+        .orders-table tr:hover {
+            background: rgba(79, 172, 254, 0.1);
+        }
+        
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: inline-block;
+            min-width: 120px;
+            text-align: center;
+        }
+        
+        .status-processing {
+            background: #4facfe;
+            color: #ffffff;
+            animation: pulse 1.5s ease-in-out infinite;
+            border: 1px solid #4facfe;
+        }
+        
+        .status-approved {
+            background: #43e97b;
+            color: #ffffff;
+        }
+        
+        .status-deleted {
+            background: #f5576c;
+            color: #ffffff;
+        }
+        
+        .status-pending {
+            background: #feca57;
+            color: #333;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(79, 172, 254, 0.7);
+            }
+            50% {
+                opacity: 0.8;
+                box-shadow: 0 0 0 10px rgba(79, 172, 254, 0);
+            }
+        }
+        
+        .timeline {
+            background: #0f3460;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+        }
+        
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .timeline-time {
+            font-weight: 700;
+            color: #4facfe;
+            min-width: 80px;
+        }
+        
+        .timeline-event {
+            flex: 1;
+            margin-left: 15px;
+        }
+        
+        .code-block {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin-top: 10px;
+            border-left: 3px solid #43e97b;
+        }
+        
+        .feature-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+        
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #2d3561;
+        }
+        
+        .feature-list li:before {
+            content: "✓ ";
+            color: #43e97b;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .info-box {
+            background: rgba(79, 172, 254, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4facfe;
+            margin-top: 15px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⏳ Real-Time Processing Order Countdown Timer</h1>
+        
+        <!-- Demo Display -->
+        <div class="demo-section">
+            <h2>📊 Admin Panel Display - Live Countdown</h2>
+            <p>Watch how the processing order countdown updates every second:</p>
+            
+            <table class="orders-table">
+                <thead>
+                    <tr>
+                        <th>Phone</th>
+                        <th>ID/Number</th>
+                        <th>Diamonds</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>01700000000</td>
+                        <td>313316464</td>
+                        <td>100</td>
+                        <td>৳500</td>
+                        <td>
+                            <span class="status-badge status-processing" id="countdown1">⏳ 2:00</span>
+                        </td>
+                        <td>12/03/2025, 10:30 AM</td>
+                    </tr>
+                    <tr>
+                        <td>01600000000</td>
+                        <td>313316465</td>
+                        <td>50</td>
+                        <td>৳250</td>
+                        <td>
+                            <span class="status-badge status-processing" id="countdown2">⏳ 1:15</span>
+                        </td>
+                        <td>12/03/2025, 10:31 AM</td>
+                    </tr>
+                    <tr>
+                        <td>01800000000</td>
+                        <td>313316466</td>
+                        <td>200</td>
+                        <td>৳1000</td>
+                        <td>
+                            <span class="status-badge status-approved">✅ approved</span>
+                        </td>
+                        <td>12/03/2025, 10:28 AM</td>
+                    </tr>
+                    <tr>
+                        <td>01900000000</td>
+                        <td>313316467</td>
+                        <td>75</td>
+                        <td>৳375</td>
+                        <td>
+                            <span class="status-badge status-deleted">🗑️ deleted</span>
+                        </td>
+                        <td>12/03/2025, 10:25 AM</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="info-box">
+                <p><strong>💡 Tip:</strong> The blue processing badges show the countdown timer in real-time.</p>
+                <p>Watch the first two orders - they'll count down every second!</p>
+            </div>
+        </div>
+        
+        <!-- Timeline Example -->
+        <div class="demo-section">
+            <h2>⏱️ Countdown Timeline Example</h2>
+            <p>Here's what happens when an order enters processing state:</p>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <span class="timeline-time">10:00:00</span>
+                    <div class="timeline-event">
+                        <strong>Order arrives & admin approves</strong><br>
+                        <span class="status-badge status-processing">⏳ 2:00</span> - Countdown starts
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <span class="timeline-time">10:00:30</span>
+                    <div class="timeline-event">
+                        <strong>30 seconds elapsed</strong><br>
+                        <span class="status-badge status-processing">⏳ 1:30</span> - Timer updates
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <span class="timeline-time">10:01:00</span>
+                    <div class="timeline-event">
+                        <strong>1 minute elapsed</strong><br>
+                        <span class="status-badge status-processing">⏳ 1:00</span> - Halfway there
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <span class="timeline-time">10:01:30</span>
+                    <div class="timeline-event">
+                        <strong>1.5 minutes elapsed</strong><br>
+                        <span class="status-badge status-processing">⏳ 0:30</span> - Final countdown
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <span class="timeline-time">10:02:00</span>
+                    <div class="timeline-event">
+                        <strong>2 minutes elapsed - AUTO-APPROVE!</strong><br>
+                        <span class="status-badge status-approved">✅ approved</span> - Order approved automatically
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Features -->
+        <div class="demo-section">
+            <h2>✨ Key Features</h2>
+            <ul class="feature-list">
+                <li><strong>Real-time Updates:</strong> Timer updates every 1 second for all processing orders</li>
+                <li><strong>Accurate Calculation:</strong> Uses order creation time to calculate exact remaining time</li>
+                <li><strong>Beautiful UI:</strong> Blue pulsing badge with MM:SS format (e.g., 1:45)</li>
+                <li><strong>Smooth Animation:</strong> Pulse effect on the processing badge for visibility</li>
+                <li><strong>Smart Formatting:</strong> Seconds always shown as 2 digits (0:05, 1:30, etc.)</li>
+                <li><strong>Auto-Sync:</strong> Countdown continues accurately when navigating pages</li>
+                <li><strong>Performance Optimized:</strong> Single interval updates ALL processing orders</li>
+                <li><strong>Socket.io Integration:</strong> Real-time updates when status changes</li>
+            </ul>
+        </div>
+        
+        <!-- How It Works -->
+        <div class="demo-section">
+            <h2>🔧 How It Works</h2>
+            <p>The countdown uses JavaScript to calculate remaining time from the order creation timestamp:</p>
+            
+            <div class="code-block">
+// Calculate remaining time every second
+const elapsedMs = Date.now() - orderCreationTime;
+const remainingMs = (2 * 60 * 1000) - elapsedMs;
+const totalSeconds = Math.ceil(remainingMs / 1000);
+const minutes = Math.floor(totalSeconds / 60);
+const seconds = totalSeconds % 60;
+const display = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+// Result: "1:45" or "0:30" etc.
+            </div>
+            
+            <div class="info-box">
+                <p><strong>📌 Zero Server Overhead:</strong></p>
+                <p>The countdown runs entirely on the admin's browser. No database calls or server processing required!</p>
+            </div>
+        </div>
+        
+        <!-- User Benefits -->
+        <div class="demo-section">
+            <h2>👥 Admin Benefits</h2>
+            <ul class="feature-list">
+                <li><strong>Transparency:</strong> See exactly how much time before auto-approval</li>
+                <li><strong>Quick Decisions:</strong> No need to calculate remaining time manually</li>
+                <li><strong>Visual Priority:</strong> Blue pulsing badge stands out from other orders</li>
+                <li><strong>Cancel Option:</strong> Delete message before timer expires to prevent auto-approval</li>
+                <li><strong>Multiple Orders:</strong> Track multiple processing orders simultaneously</li>
+                <li><strong>No Page Refresh Needed:</strong> Countdown continues even while admin works on other tasks</li>
+            </ul>
+        </div>
+        
+        <!-- Implementation Details -->
+        <div class="demo-section">
+            <h2>📝 Implementation Details</h2>
+            <p><strong>File Modified:</strong> <code>admin-panel/public/js/app.js</code></p>
+            
+            <p><strong>Functions Added:</strong></p>
+            <ul class="feature-list">
+                <li><code>startProcessingCountdown()</code> - Initializes 1-second interval updater</li>
+                <li><code>displayOrdersPage()</code> - Enhanced to calculate & display countdown</li>
+            </ul>
+            
+            <p style="margin-top: 15px;"><strong>Data Attributes Used:</strong></p>
+            <div class="code-block">
+&lt;span data-order-id="1764763063688" 
+      data-start-time="1733193000000"&gt;
+    ⏳ 1:45
+&lt;/span&gt;
+
+data-order-id     = Unique order identifier
+data-start-time   = Order creation timestamp
+            </div>
+        </div>
+        
+        <!-- CSS Styling -->
+        <div class="demo-section">
+            <h2>🎨 CSS Styling</h2>
+            <p>The processing badge shows with blue color and pulse animation:</p>
+            
+            <div class="code-block">
+.status-processing {
+    background: #4facfe;
+    color: #ffffff;
+    animation: pulse 1.5s ease-in-out infinite;
+    border: 1px solid #4facfe;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+            </div>
+        </div>
+        
+        <!-- Summary -->
+        <div class="demo-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-left-color: #43e97b;">
+            <h2 style="color: #fff;">✅ Summary</h2>
+            <ul class="feature-list" style="color: #fff;">
+                <li><strong>Real-time Countdown:</strong> Shows remaining time in MM:SS format</li>
+                <li><strong>Updates Every Second:</strong> Accurate, smooth counting down</li>
+                <li><strong>Beautiful UI:</strong> Blue pulsing badge with live timer</li>
+                <li><strong>Zero Overhead:</strong> Client-side calculation, no server load</li>
+                <li><strong>Production Ready:</strong> Tested and working in live environment</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Auto-updating countdown demo (for visual effect) -->
+    <script>
+        function updateCountdowns() {
+            // Simulate two orders with different start times
+            const now = Date.now();
+            const startTime1 = now - (45 * 1000); // Started 45 seconds ago
+            const startTime2 = now - (105 * 1000); // Started 105 seconds ago
+            
+            // Calculate remaining time for order 1
+            const elapsed1 = now - startTime1;
+            const remaining1 = (2 * 60 * 1000) - elapsed1;
+            if (remaining1 > 0) {
+                const totalSeconds1 = Math.ceil(remaining1 / 1000);
+                const minutes1 = Math.floor(totalSeconds1 / 60);
+                const seconds1 = totalSeconds1 % 60;
+                document.getElementById('countdown1').textContent = 
+                    `⏳ ${minutes1}:${seconds1.toString().padStart(2, '0')}`;
+            }
+            
+            // Calculate remaining time for order 2
+            const elapsed2 = now - startTime2;
+            const remaining2 = (2 * 60 * 1000) - elapsed2;
+            if (remaining2 > 0) {
+                const totalSeconds2 = Math.ceil(remaining2 / 1000);
+                const minutes2 = Math.floor(totalSeconds2 / 60);
+                const seconds2 = totalSeconds2 % 60;
+                document.getElementById('countdown2').textContent = 
+                    `⏳ ${minutes2}:${seconds2.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        // Update every second
+        setInterval(updateCountdowns, 1000);
+        updateCountdowns(); // Initial update
+    </script>
+</body>
+</html>

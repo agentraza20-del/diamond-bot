@@ -1,0 +1,17 @@
+[Unit]
+Description=Diamond Bot WhatsApp Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/diamond-bot
+ExecStart=/usr/bin/node /root/diamond-bot/index.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/root/diamond-bot/systemd.log
+StandardError=append:/root/diamond-bot/systemd.log
+Environment="NODE_ENV=production"
+
+[Install]
+WantedBy=multi-user.target

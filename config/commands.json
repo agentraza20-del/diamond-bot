@@ -1,0 +1,30 @@
+{
+  "userCommands": [
+    {
+      "command": "!balance",
+      "description": "Check your account balance",
+      "response": "আপনার balance আছে: {balance} টাকা",
+      "type": "user"
+    },
+    {
+      "command": "!help",
+      "description": "Show all available commands",
+      "response": "সব commands দেখুন admin এর কাছে",
+      "type": "user"
+    }
+  ],
+  "adminCommands": [
+    {
+      "command": "!announce",
+      "description": "Send announcement to all groups",
+      "response": "Announcement sent to {groupCount} groups",
+      "type": "admin"
+    },
+    {
+      "command": "!status",
+      "description": "Check bot status",
+      "response": "Bot is online and active",
+      "type": "admin"
+    }
+  ]
+}

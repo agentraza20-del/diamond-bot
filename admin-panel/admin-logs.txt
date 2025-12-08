@@ -1,0 +1,154 @@
+[2025-11-27T09:49:37.989Z] 📢 Due reminder sent to Bot making | Due: ৳5000
+[2025-11-27T09:56:32.916Z] 📢 Due reminder sent to Bot making | Due: ৳5000
+[2025-11-27T11:11:32.177Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T11:31:27.527Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, Due: 5000)
+[2025-11-27T11:31:43.733Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, Due: 3300)
+[2025-11-27T11:34:44.491Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, Due: 1000)
+[2025-11-27T11:39:42.387Z] Updated user: 115930327715989 (Name: Maneger, Balance: 0, DueBalance: 2300)
+[2025-11-27T11:44:22.242Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, DueBalance: 5000)
+[2025-11-27T11:45:12.472Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, DueBalance: 6500)
+[2025-11-27T11:55:47.097Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, DueBalance: 2200)
+[2025-11-27T13:01:41.312Z] 💎 Admin diamond stock updated to: 111
+[2025-11-27T13:01:55.541Z] 💎 Admin diamond stock updated to: 1000
+[2025-11-27T13:13:02.679Z] 💎 Admin diamond stock updated to: 700000
+[2025-11-27T13:14:56.738Z] 💎 Admin diamond stock updated to: 0
+[2025-11-27T13:24:10.110Z] 💎 Admin diamond stock updated to: 1000
+[2025-11-27T13:28:31.174Z] 💎 Admin diamond stock updated to: 1000
+[2025-11-27T13:35:40.901Z] 💎 Admin diamond stock updated to: 10000
+[2025-11-27T13:46:34.260Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T14:20:13.906Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T15:25:43.827Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T15:26:11.495Z] 💎 Admin diamond stock updated to: 100000
+[2025-11-27T15:28:23.418Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T15:29:07.337Z] Added WhatsApp admin: 8801339842889
+[2025-11-27T15:30:41.129Z] Removed WhatsApp admin: 8801339842889
+[2025-11-27T15:30:52.187Z] Added WhatsApp admin: 8801339842889
+[2025-11-30T05:42:25.711Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-30T07:09:22.711Z] undefined
+[2025-11-30T07:12:17.372Z] undefined
+[2025-11-30T07:18:57.473Z] undefined
+[2025-11-30T07:23:19.559Z] undefined
+[2025-11-30T07:26:22.247Z] undefined
+[2025-11-30T07:30:59.090Z] undefined
+[2025-11-30T08:17:24.602Z] 💳 Payment keywords updated (21 total keywords)
+[2025-11-30T08:24:22.078Z] 🔐 Admin logged in
+[2025-11-30T16:21:24.794Z] 🔐 Admin logged in
+[2025-11-30T16:22:18.694Z] 🔐 Admin logged in
+[2025-11-30T16:55:36.522Z] 📢 Due reminder sent to Bot making | Due: ৳4650
+[2025-11-30T18:15:58.683Z] 🔐 Admin logged in
+[2025-11-30T18:27:01.379Z] 📢 Due reminder sent to Bot making | Due: ৳4650
+[2025-12-01T06:51:24.715Z] 🔐 Admin logged in
+[2025-12-01T06:53:11.310Z] Added WhatsApp admin: 8801605473427
+[2025-12-01T06:54:11.629Z] Removed WhatsApp admin: 8801605473427
+[2025-12-01T06:54:50.106Z] Added WhatsApp admin: 8801611938365
+[2025-12-01T07:01:48.037Z] Added WhatsApp admin: 8801725001423
+[2025-12-01T07:04:27.825Z] Removed WhatsApp admin: 8801725001423
+[2025-12-01T07:05:59.031Z] Added WhatsApp admin: 8801725001423
+[2025-12-01T11:49:52.427Z] Added WhatsApp admin: 8801991100552
+[2025-12-01T11:52:45.847Z] Removed WhatsApp admin: 8801991100552
+[2025-12-01T11:59:07.790Z] Added WhatsApp admin: 8801991100552
+[2025-12-01T11:59:59.274Z] Removed WhatsApp admin: 8801991100552
+[2025-12-01T12:13:43.035Z] Added WhatsApp admin: 8801991100552
+[2025-12-03T11:19:04.855Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-03T11:19:16.215Z] 🔐 Admin logged in
+[2025-12-03T15:39:44.075Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-03T15:39:56.860Z] 🔐 Admin logged in
+[2025-12-03T16:42:55.010Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-03T16:43:13.591Z] 🔐 Admin logged in
+[2025-12-04T09:20:13.937Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:20:14.943Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:20:16.515Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:20:32.266Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:22:06.285Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:22:09.634Z] 🗑️ Delete message edit: ENABLED
+[2025-12-04T09:24:36.779Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:24:38.726Z] 🗑️ Delete message edit: ENABLED
+[2025-12-04T09:24:39.481Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:24:40.080Z] 🗑️ Delete message edit: ENABLED
+[2025-12-04T09:24:40.877Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:24:42.310Z] 🗑️ Delete message edit: ENABLED
+[2025-12-04T09:25:37.220Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:29:14.998Z] 🗑️ Delete message edit: ENABLED
+[2025-12-04T09:29:15.868Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:29:16.757Z] 🗑️ Delete message edit: ENABLED
+[2025-12-04T09:29:17.211Z] 🗑️ Delete message edit: DISABLED
+[2025-12-04T09:36:24.757Z] 🤖 Auto-approval message: DISABLED
+[2025-12-04T10:09:10.786Z] 🚫 Cancel keyword added: "vul"
+[2025-12-04T10:09:22.405Z] 🚫 Cancel keyword added: "vul number"
+[2025-12-04T10:09:39.078Z] 🚫 Cancel keyword added: "ভুল নাম্বার"
+[2025-12-04T10:10:21.525Z] 🚫 Cancel keyword added: "ভুল"
+[2025-12-04T10:10:35.919Z] 🚫 Cancel keyword added: "নাম্বার ভুল"
+[2025-12-04T10:11:08.467Z] 🚫 Cancel keyword added: "number vul"
+[2025-12-06T14:06:13.840Z] 🔐 Admin logged in
+[2025-12-06T14:45:56.988Z] 🗑️ Delete message edit: ENABLED
+[2025-12-06T14:45:57.638Z] 🗑️ Delete message edit: DISABLED
+[2025-12-06T15:16:57.355Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-06T15:17:08.490Z] 🔐 Admin logged in
+[2025-12-06T21:29:22.641Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-06T21:29:42.762Z] 🔐 Admin logged in
+[2025-12-06T22:04:41.904Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-06T22:04:53.370Z] 🔐 Admin logged in
+[2025-12-06T22:13:50.032Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-06T22:14:06.530Z] 🔐 Admin logged in
+[2025-12-07T06:28:22.154Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T06:28:42.192Z] 🔐 Admin logged in
+[2025-12-07T07:32:51.608Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T15:25:08.892Z] 🔐 Admin logged in
+[2025-12-07T15:25:19.836Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T15:25:41.433Z] 🔐 Admin logged in
+[2025-12-07T17:05:03.031Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:05:22.098Z] 🔐 Admin logged in
+[2025-12-07T17:09:07.854Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:09:24.253Z] 🔐 Admin logged in
+[2025-12-07T17:24:17.631Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:24:47.623Z] 🔐 Admin logged in
+[2025-12-07T17:31:27.566Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:31:42.034Z] 🔐 Admin logged in
+[2025-12-07T17:32:14.945Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:43:29.527Z] 🔐 Admin logged in
+[2025-12-07T17:43:49.949Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:44:00.632Z] 🔐 Admin logged in
+[2025-12-07T17:52:18.800Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T17:52:29.891Z] 🔐 Admin logged in
+[2025-12-07T18:02:49.257Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T18:03:05.164Z] 🔐 Admin logged in
+[2025-12-07T18:09:06.010Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T18:09:29.149Z] 🔐 Admin logged in
+[2025-12-07T18:57:26.523Z] 🔍 Missing Order Detection: DISABLED
+[2025-12-07T18:57:30.908Z] 🔍 Missing Order Detection: ENABLED
+[2025-12-07T18:57:34.220Z] 🔍 Missing Order Detection: DISABLED
+[2025-12-07T18:58:42.096Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T18:58:58.681Z] 🔐 Admin logged in
+[2025-12-07T18:59:52.307Z] 🔍 Missing Order Detection: ENABLED
+[2025-12-07T19:00:28.551Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T19:00:39.841Z] 🔐 Admin logged in
+[2025-12-07T19:01:48.324Z] 🔍 Missing Order Detection: DISABLED
+[2025-12-07T19:01:52.455Z] 🔍 Missing Order Detection: ENABLED
+[2025-12-07T19:02:36.006Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-07T19:02:47.252Z] 🔐 Admin logged in
+[2025-12-08T06:33:06.284Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T06:33:16.596Z] 🔐 Admin logged in
+[2025-12-08T06:38:20.422Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T06:38:48.704Z] 🔐 Admin logged in
+[2025-12-08T07:24:47.032Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T07:24:58.236Z] 🔐 Admin logged in
+[2025-12-08T07:39:45.800Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T07:40:08.477Z] 🔐 Admin logged in
+[2025-12-08T07:56:26.414Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T07:56:36.720Z] 🔐 Admin logged in
+[2025-12-08T08:05:30.561Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T08:05:42.489Z] 🔐 Admin logged in
+[2025-12-08T08:17:17.616Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T08:17:46.169Z] 🔐 Admin logged in
+[2025-12-08T09:25:19.166Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T09:25:28.867Z] 🔐 Admin logged in
+[2025-12-08T10:02:57.916Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T10:03:08.353Z] 🔐 Admin logged in
+[2025-12-08T10:39:03.711Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T10:39:34.828Z] 🔐 Admin logged in
+[2025-12-08T10:39:44.954Z] 💎 Admin diamond stock updated to: 123456
+[2025-12-08T11:07:32.260Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T11:07:41.743Z] 🔐 Admin logged in
+[2025-12-08T11:44:02.304Z] Updated user: 76210050711676 (Name: RUBEL, Balance: 0, DueBalance: 484)
+[2025-12-08T11:49:12.598Z] Updated user: 76210050711676 (Name: RUBEL, Balance: 0, DueBalance: 984)
+[2025-12-08T11:59:55.850Z] Updated user: 76210050711676 (Name: RUBEL, Balance: 0, DueBalance: 2984)

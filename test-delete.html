@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Delete Button</title>
+</head>
+<body>
+    <h1>Test Delete Order API</h1>
+    
+    <h2>Step 1: Check Orders</h2>
+    <button onclick="checkOrders()">Get All Orders</button>
+    <pre id="ordersOutput"></pre>
+
+    <h2>Step 2: Delete an Order</h2>
+    <input type="number" id="orderId" placeholder="Enter Order ID" />
+    <button onclick="testDelete()">Test Delete</button>
+    <pre id="deleteOutput"></pre>
+
+    <script>
+        async function checkOrders() {
+            try {
+                const response = await fetch('http://localhost:3000/api/orders');
+                const data = await response.json();
+                console.log('Orders:', data);
+                document.getElementById('ordersOutput').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('ordersOutput').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function testDelete() {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                if (!orderId) {
+                    alert('Please enter an Order ID');
+                    return;
+                }
+
+                console.log('Testing delete for order:', orderId);
+                
+                const response = await fetch(`http://localhost:3000/api/orders/${orderId}/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                console.log('Delete response:', data);
+                document.getElementById('deleteOutput').textContent = JSON.stringify(data, null, 2);
+
+                if (data.success) {
+                    alert('✅ Order deleted successfully! Check orders again.');
+                    checkOrders();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('deleteOutput').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Auto load orders on page load
+        window.onload = checkOrders;
+    </script>
+</body>
+</html>

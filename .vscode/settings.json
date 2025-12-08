@@ -1,0 +1,4 @@
+{
+    "codium.codeCompletion.enable": false,
+    "github.copilot.nextEditSuggestions.enabled": true
+}

@@ -44,7 +44,7 @@ setTimeout(() => {
     console.log('\n✅ Admin Panel: http://localhost:3000');
     console.log('✅ Admin API: http://localhost:3005');
     console.log('✅ Dashboard: http://localhost:3000/dashboard.html\n');
-}, 3000); // Increased delay to 3 seconds
+}, 8000); // Increased delay to 8 seconds to allow admin panel full startup
 
 // Handle bot process exit
 botProcess.on('exit', (code) => {

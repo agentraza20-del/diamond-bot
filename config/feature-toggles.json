@@ -12,7 +12,7 @@
     "name": "Offline Order Detection",
     "description": "অফলাইন অর্ডার detect করবে এবং track করবে [DISABLED]",
     "offlineThreshold": 2,
-    "lastModified": "2025-12-07T10:35:00Z",
+    "lastModified": "2025-12-08T14:45:12.420Z",
     "modifiedBy": "admin",
     "disabledAt": "2025-12-07T10:35:00Z",
     "reason": "Completely disabled by admin request"

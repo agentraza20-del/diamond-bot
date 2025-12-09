@@ -7,7 +7,20 @@ const fsSync = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST", "OPTIONS"],
+        credentials: false,
+        allowEIO3: true
+    },
+    transports: ['websocket', 'polling'],
+    pingInterval: 25000,
+    pingTimeout: 60000,
+    allowUpgrades: true,
+    maxHttpBufferSize: 1e6,
+    perMessageDeflate: false
+});
 
 const PORT = process.env.ADMIN_PORT || 3005;
 
@@ -515,10 +528,16 @@ app.get('/api/groups', async (req, res) => {
                         .reduce((sum, t) => sum + (t.amount || 0), 0);
                 }
                 
-                // Use dueBalanceOverride if set, otherwise calculate from: Total Orders - Paid Amount
+                // Use group-specific dueBalanceOverride if set, otherwise calculate from: Total Orders - Paid Amount
                 let userDue;
-                if (userData?.dueBalanceOverride !== undefined) {
-                    userDue = userData?.dueBalanceOverride; // Use manually set due balance
+                if (userData?.dueBalanceOverride && typeof userData.dueBalanceOverride === 'object') {
+                    // If override is an object (group-specific), use value for this group
+                    userDue = userData.dueBalanceOverride[id] !== undefined 
+                        ? userData.dueBalanceOverride[id] 
+                        : Math.max(0, userOrderAmount - userPaidAmount);
+                } else if (userData?.dueBalanceOverride !== undefined && typeof userData.dueBalanceOverride === 'number') {
+                    // Legacy: if override is a number, use it only if it's positive (old format)
+                    userDue = userData.dueBalanceOverride > 0 ? userData.dueBalanceOverride : Math.max(0, userOrderAmount - userPaidAmount);
                 } else {
                     // Due Balance = Total Orders - Total Paid (through auto-deductions)
                     userDue = Math.max(0, userOrderAmount - userPaidAmount);
@@ -536,29 +555,48 @@ app.get('/api/groups', async (req, res) => {
             
             // Also add users with manually set due balance (dueBalanceOverride) who may not be in this group's orders
             Object.entries(users).forEach(([phone, userData]) => {
-                if (userData.dueBalanceOverride !== undefined && userData.dueBalanceOverride > 0) {
-                    // Clean phone for comparison
-                    const cleanPhone = phone.replace(/\D/g, '');
+                if (userData.dueBalanceOverride !== undefined) {
+                    let groupDue = 0;
                     
-                    // Check if this user is already in the breakdown
-                    const existingUserIndex = userDueBreakdown.findIndex(u => {
-                        const existingCleanPhone = u.userId.replace('@lid', '').replace(/\D/g, '');
-                        return existingCleanPhone === cleanPhone || cleanPhone === existingCleanPhone;
-                    });
+                    // Get the due amount for this specific group
+                    if (typeof userData.dueBalanceOverride === 'object') {
+                        groupDue = userData.dueBalanceOverride[id] || 0;
+                    } else if (typeof userData.dueBalanceOverride === 'number') {
+                        groupDue = userData.dueBalanceOverride;
+                    }
                     
-                    if (existingUserIndex !== -1) {
-                        // User already exists - update their due to use override
-                        userDueBreakdown[existingUserIndex].due = Math.round(userData.dueBalanceOverride);
-                    } else {
-                        // Add this user to the breakdown
-                        userDueBreakdown.push({
-                            userId: phone,
-                            displayName: userData.name || phone,
-                            orderAmount: 0,
-                            balance: userData.balance || 0,
-                            paid: 0,
-                            due: Math.round(userData.dueBalanceOverride)
+                    if (groupDue > 0) {
+                        // Clean phone for comparison
+                        const cleanPhone = phone.replace(/\D/g, '');
+                        
+                        // Check if this user is already in the breakdown
+                        const existingUserIndex = userDueBreakdown.findIndex(u => {
+                            const existingCleanPhone = u.userId.replace('@lid', '').replace(/\D/g, '');
+                            return existingCleanPhone === cleanPhone || cleanPhone === existingCleanPhone;
                         });
+                        
+                        if (existingUserIndex !== -1) {
+                            // User already exists - update their due to use override (group-specific)
+                            userDueBreakdown[existingUserIndex].due = Math.round(groupDue);
+                        } else {
+                            // Only add if user is in this group
+                            const isUserInGroup = groupUsers.some(userId => {
+                                const userCleanPhone = userId.replace('@lid', '').replace(/\D/g, '');
+                                return userCleanPhone === cleanPhone || cleanPhone === userCleanPhone;
+                            });
+                            
+                            if (isUserInGroup) {
+                                // Add this user to the breakdown
+                                userDueBreakdown.push({
+                                    userId: phone,
+                                    displayName: userData.name || phone,
+                                    orderAmount: 0,
+                                    balance: userData.balance || 0,
+                                    paid: 0,
+                                    due: Math.round(groupDue)
+                                });
+                            }
+                        }
                     }
                 }
             });
@@ -988,7 +1026,7 @@ app.get('/api/users/:phone', async (req, res) => {
 app.post('/api/users/:phone/update', async (req, res) => {
     try {
         const { phone } = req.params;
-        const { name, balance, dueBalance } = req.body;
+        const { name, balance, dueBalance, groupId } = req.body;
         const users = await readJSON(usersPath);
         const database = await readJSON(databasePath);
 
@@ -1008,37 +1046,48 @@ app.post('/api/users/:phone/update', async (req, res) => {
         users[phone].name = name || users[phone].name;
         users[phone].balance = typeof balance !== 'undefined' ? parseInt(balance) : users[phone].balance || 0;
         
-        // Handle dueBalance - either update groups if it's an override, or recalculate
+        // Handle dueBalance - store as group-specific override
         const newDueBalance = typeof dueBalance !== 'undefined' ? parseInt(dueBalance) : null;
         
-        // Calculate current due from groups
-        let userCurrentDue = 0;
-        const groups = database.groups || {};
-        Object.values(groups).forEach(group => {
-            const entries = group.entries || [];
-            entries.forEach(entry => {
-                if (entry.userId === phone || entry.userName === phone) {
-                    const diamonds = entry.diamonds || 0;
-                    const rate = entry.rate || 0;
-                    userCurrentDue += diamonds * rate;
+        if (newDueBalance !== null) {
+            // If groupId provided, store override specific to that group
+            if (groupId) {
+                if (!users[phone].dueBalanceOverride) {
+                    users[phone].dueBalanceOverride = {};
                 }
-            });
-        });
-        
-        // If new dueBalance is provided and different from calculated, store override
-        if (newDueBalance !== null && newDueBalance !== userCurrentDue) {
-            users[phone].dueBalanceOverride = newDueBalance;
-        } else if (users[phone].dueBalanceOverride !== undefined) {
-            delete users[phone].dueBalanceOverride;
+                users[phone].dueBalanceOverride[groupId] = newDueBalance;
+            } else {
+                // If no groupId, check if user exists in only one group
+                const groups = database.groups || {};
+                const userGroups = Object.keys(groups).filter(gid => {
+                    const group = groups[gid];
+                    if (group.entries) {
+                        return group.entries.some(entry => 
+                            entry.userId === phone || 
+                            entry.phone === phone || 
+                            entry.userName === phone
+                        );
+                    }
+                    return false;
+                });
+                
+                if (userGroups.length === 1) {
+                    // User is in only one group, apply to that group
+                    if (!users[phone].dueBalanceOverride) {
+                        users[phone].dueBalanceOverride = {};
+                    }
+                    users[phone].dueBalanceOverride[userGroups[0]] = newDueBalance;
+                }
+            }
         }
 
         await writeJSON(usersPath, users);
 
         // Log the action
-        const logEntry = `[${new Date().toISOString()}] Updated user: ${phone} (Name: ${name}, Balance: ${balance}, DueBalance: ${newDueBalance || 'calculated'})\n`;
+        const logEntry = `[${new Date().toISOString()}] Updated user: ${phone} (Name: ${name}, Balance: ${balance}, DueBalance: ${newDueBalance || 'calculated'}${groupId ? ` for Group: ${groupId}` : ''})\n`;
         await fs.appendFile(path.join(__dirname, 'admin-logs.txt'), logEntry);
 
-        io.emit('userUpdated', { phone, name, balance, dueBalance: newDueBalance || userCurrentDue });
+        io.emit('userUpdated', { phone, name, balance, dueBalance: newDueBalance, groupId });
 
         res.json({ 
             success: true, 
@@ -1578,8 +1627,27 @@ app.post('/api/orders/:orderId/restore', async (req, res) => {
 // Payment Numbers
 app.get('/api/payment-numbers', async (req, res) => {
     try {
+        // Check if request is from admin panel (for admin use only)
+        const adminView = req.query.admin_view === 'true';
+        
+        // Check if payment system is enabled
+        const paymentSettingsPath = path.join(dbPath, 'payment-settings.json');
+        let settings = { enabled: true };
+        
+        try {
+            settings = await readJSON(paymentSettingsPath);
+        } catch (e) {
+            // File doesn't exist, default to enabled
+        }
+        
+        // If payment system is disabled and NOT admin view, return empty list
+        if (!settings.enabled && !adminView) {
+            return res.json({ paymentNumbers: [], isEnabled: false });
+        }
+        
+        // For admin view or when enabled, return all payment numbers
         const paymentNumbers = await readJSON(path.join(dbPath, 'payment-number.json'));
-        res.json(paymentNumbers);
+        res.json({ ...paymentNumbers, isEnabled: settings.enabled });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -2232,9 +2300,9 @@ app.post('/api/clear-all-data', async (req, res) => {
 // Send Due Reminders
 app.post('/api/send-due-reminders', async (req, res) => {
     try {
-        const { groupIds } = req.body;
+        const { groups: reminderGroups } = req.body;
         
-        if (!Array.isArray(groupIds) || groupIds.length === 0) {
+        if (!Array.isArray(reminderGroups) || reminderGroups.length === 0) {
             return res.status(400).json({ success: false, error: 'No groups selected for reminders' });
         }
         
@@ -2246,23 +2314,10 @@ app.post('/api/send-due-reminders', async (req, res) => {
         const paymentData = await readJSON(paymentNumbersPath);
         const paymentNumbers = paymentData.paymentNumbers || [];
         
-        // Format payment instructions
-        let paymentInstructions = '📱 *পেমেন্ট নম্বর:*\n\n';
-        paymentNumbers.forEach(payment => {
-            if (payment.isBank) {
-                paymentInstructions += `🏦 *${payment.method}*\n`;
-                paymentInstructions += `💳 একাউন্ট: ${payment.accountNumber}\n`;
-                paymentInstructions += `👤 নাম: ${payment.accountName}\n`;
-                paymentInstructions += `📍 শাখা: ${payment.branch}\n\n`;
-            } else {
-                paymentInstructions += `📱 *${payment.method}* (${payment.type}): ${payment.number}\n`;
-            }
-        });
-        paymentInstructions += '\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
-        
         const results = [];
         
-        for (const groupId of groupIds) {
+        for (const reminderGroup of reminderGroups) {
+            const { groupId, paymentMethodIndices } = reminderGroup;
             const group = groups[groupId];
             
             if (!group) {
@@ -2292,6 +2347,40 @@ app.post('/api/send-due-reminders', async (req, res) => {
                 });
                 continue;
             }
+            
+            // Format payment instructions based on selected payment methods
+            let paymentInstructions = '📱 *পেমেন্ট নম্বর:*\n\n';
+            
+            // If specific payment methods are selected, use only those
+            if (Array.isArray(paymentMethodIndices) && paymentMethodIndices.length > 0) {
+                paymentMethodIndices.forEach(index => {
+                    const payment = paymentNumbers[index];
+                    if (payment) {
+                        if (payment.isBank) {
+                            paymentInstructions += `🏦 *${payment.method}*\n`;
+                            paymentInstructions += `💳 একাউন্ট: ${payment.accountNumber}\n`;
+                            paymentInstructions += `👤 নাম: ${payment.accountName}\n`;
+                            paymentInstructions += `📍 শাখা: ${payment.branch}\n\n`;
+                        } else {
+                            paymentInstructions += `📱 *${payment.method}* (${payment.type}): ${payment.number}\n`;
+                        }
+                    }
+                });
+            } else {
+                // If no specific methods selected, use all payment methods
+                paymentNumbers.forEach(payment => {
+                    if (payment.isBank) {
+                        paymentInstructions += `🏦 *${payment.method}*\n`;
+                        paymentInstructions += `💳 একাউন্ট: ${payment.accountNumber}\n`;
+                        paymentInstructions += `👤 নাম: ${payment.accountName}\n`;
+                        paymentInstructions += `📍 শাখা: ${payment.branch}\n\n`;
+                    } else {
+                        paymentInstructions += `📱 *${payment.method}* (${payment.type}): ${payment.number}\n`;
+                    }
+                });
+            }
+            
+            paymentInstructions += '\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
             
             // Create reminder message with payment instructions
             const message = `
@@ -2499,22 +2588,15 @@ async function broadcastMessageToGroup(groupId, status) {
     try {
         const message = getGroupStatusMessage(groupId, status);
         
-        // Send via HTTP request to bot API (port 3003)
-        const response = await fetch('http://localhost:3003/api/bot-send-message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                groupId: groupId,
-                message: message,
-                type: 'status-update'
-            })
+        // Emit to all connected sockets (including bot client)
+        io.emit('sendGroupMessage', {
+            groupId: groupId,
+            message: message,
+            type: 'status-update',
+            timestamp: new Date().toISOString()
         });
         
-        if (response.ok) {
-            console.log(`[BROADCAST] ✅ Message sent to group: ${groupId}`);
-        } else {
-            console.error(`[BROADCAST] ❌ Failed to send to group: ${groupId}`, response.status);
-        }
+        console.log(`[BROADCAST] ✅ Broadcast emitted for group: ${groupId}`);
     } catch (error) {
         console.error(`[BROADCAST] Error sending to group ${groupId}:`, error.message);
     }
@@ -3226,22 +3308,33 @@ app.get('/api/group-details/:period', async (req, res) => {
         
         const dateRange = getDateRange(period);
         
-        // Calculate group stats for period (note: without timestamps in entries, showing overall)
+        // Calculate group stats for period with actual date filtering
         const groupStats = Object.entries(groups).map(([groupId, groupData]) => {
             const entries = groupData.entries || [];
             
-            // Since entries don't have timestamps yet, we'll show overall data
-            // In future, filter by date: entries.filter(e => new Date(e.createdAt) >= dateRange.start)
-            const approvedEntries = entries.filter(e => e.status === 'approved');
-            const totalDiamonds = approvedEntries.reduce((sum, e) => sum + (e.diamonds || 0), 0);
-            const totalAmount = approvedEntries.reduce((sum, e) => sum + (e.diamonds * (e.rate || 0)), 0);
+            // Filter entries by date range and approved status
+            const filteredEntries = entries.filter(e => {
+                // Must be approved
+                if (e.status !== 'approved') return false;
+                
+                // Check if entry has a valid timestamp
+                if (!e.createdAt) return false;
+                
+                const entryDate = new Date(e.createdAt);
+                
+                // Check if date is within range
+                return entryDate >= dateRange.start && entryDate <= dateRange.end;
+            });
+            
+            const totalDiamonds = filteredEntries.reduce((sum, e) => sum + (e.diamonds || 0), 0);
+            const totalAmount = filteredEntries.reduce((sum, e) => sum + (e.diamonds * (e.rate || 0)), 0);
             
             return {
                 id: groupId,
                 name: groupData.groupName || groupData.name || 'Unknown',
                 diamonds: totalDiamonds,
                 amount: Math.round(totalAmount),
-                orders: approvedEntries.length,
+                orders: filteredEntries.length,
                 due: groupData.totalDue || 0,
                 period: period
             };
@@ -3357,5 +3450,24 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n📱 Access from this device: http://localhost:${PORT}`);
     console.log(`📱 Access from other devices: http://YOUR_IP:${PORT}`);
     console.log(`\n💡 To find your IP address, run: ipconfig (Windows) or ifconfig (Mac/Linux)`);
-    console.log(`\nExample: http://192.168.1.100:${PORT}\n`);
+    console.log(`\nExample: http://192.168.1.100:${PORT}`);
+    console.log(`\n✅ [SOCKET.IO] Server ready - Bot can now connect on port ${PORT}\n`);
+});
+
+// Socket.IO connection logging
+io.on('connection', (socket) => {
+    console.log(`[SOCKET.IO] Client connected: ${socket.id}`);
+    console.log(`[SOCKET.IO] Total clients: ${io.engine.clientsCount}`);
+    
+    socket.on('disconnect', () => {
+        console.log(`[SOCKET.IO] Client disconnected: ${socket.id}`);
+    });
+    
+    socket.on('error', (error) => {
+        console.error(`[SOCKET.IO] Socket error (${socket.id}):`, error);
+    });
+});
+
+io.engine.on('connection_error', (err) => {
+    console.error('[SOCKET.IO] Engine connection error:', err);
 });

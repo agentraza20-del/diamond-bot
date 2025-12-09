@@ -22,6 +22,10 @@
             <span>Diamond Bot Admin</span>
         </div>
         <div class="navbar-actions">
+            <div class="countdown-display" id="countdownDisplay">
+                <i class="fas fa-clock"></i>
+                <span id="countdownText">Syncing...</span>
+            </div>
             <button class="icon-btn" id="themeToggle">
                 <i class="fas fa-moon"></i>
             </button>
@@ -49,8 +53,8 @@
         <!-- Home View -->
         <div class="view active" id="homeView">
             <div class="view-header">
-                <h1><i class="fas fa-home"></i> Home</h1>
-                <button class="btn-refresh" onclick="refreshDiamondStatus()">
+                <h1 data-i18n="home"><i class="fas fa-home"></i> Home</h1>
+                <button class="btn-refresh" onclick="refreshDiamondStatus()" title="Refresh">
                     <i class="fas fa-sync-alt"></i>
                 </button>
             </div>
@@ -289,10 +293,10 @@
             <div class="view-header">
                 <h1><i class="fas fa-users"></i> Manage Groups</h1>
                 <div class="header-actions">
-                    <button class="btn-primary" onclick="showBulkRateModal()">
+                    <button class="btn-primary btn-header-action" onclick="showBulkRateModal()">
                         <i class="fas fa-edit"></i> Bulk Rate Update
                     </button>
-                    <button class="btn-primary" onclick="showDueReminderModal()" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); margin-left: 10px;">
+                    <button class="btn-primary btn-header-action btn-due-reminder" onclick="showDueReminderModal()">
                         <i class="fas fa-bell"></i> Send Due Reminder
                     </button>
                 </div>
@@ -300,16 +304,12 @@
 
             <!-- Select & Calculate Section -->
             <div class="section">
-                <h2><i class="fas fa-calculator"></i> Select Groups & Calculate Total Diamonds</h2>
-                <div class="select-calculate-container">
-                    <div class="select-actions">
-                        <button class="btn-secondary" onclick="selectAllGroups()">
+                <h2><i class="fas fa-calculator"></i> Select Groups & Calculate</h2>
+                <div class="select-actions">
+                        <button class="btn-secondary" id="toggleSelectBtn" onclick="toggleSelectAll()">
                             <i class="fas fa-check-square"></i> Select All
                         </button>
-                        <button class="btn-secondary" onclick="deselectAllGroups()">
-                            <i class="fas fa-square"></i> Deselect All
-                        </button>
-                        <button class="btn-secondary" onclick="calculateSelectedDiamonds()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+                        <button class="btn-secondary btn-calculate" onclick="calculateSelectedDiamonds()">
                             <i class="fas fa-calculator"></i> Calculate Total
                         </button>
                     </div>
@@ -377,7 +377,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
             </div>
 
             <!-- Search and Filter -->
@@ -419,6 +418,9 @@
                 </button>
                 <button class="tab-order" onclick="switchOrderTab('approved')">
                     <i class="fas fa-check-circle"></i> Approved
+                </button>
+                <button class="tab-order" onclick="switchOrderTab('deleted')">
+                    <i class="fas fa-trash"></i> Deleted
                 </button>
             </div>
 
@@ -506,8 +508,103 @@
                 </table>
             </div>
 
+            <!-- Deleted Orders Tab -->
+            <div class="table-container tab-orders-content" id="ordersTab-deleted">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Phone</th>
+                            <th>ID/Number</th>
+                            <th>Diamonds</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableDeleted"><tr><td colspan="8" class="loading">No deleted orders found</td></tr></tbody>
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
             <!-- Pagination -->
             <div id="ordersPagination" class="pagination"></div>
+        </div>
+
+        <!-- All Orders View (from all groups) -->
+        <div class="view" id="allOrdersView">
+            <div class="view-header">
+                <h1 data-i18n="allOrders"><i class="fas fa-list"></i> All Orders</h1>
+                <button class="btn-refresh" onclick="loadAllGroupOrders()" title="Refresh">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="allOrdersSearch" data-i18n-placeholder="search" placeholder="Search all orders..." onkeyup="filterAllOrders()">
+            </div>
+
+            <!-- Status Tabs -->
+            <div class="tabs-orders">
+                <button class="tab-order active" onclick="switchAllOrdersTab('all')">
+                    <i class="fas fa-list"></i> All
+                </button>
+                <button class="tab-order" onclick="switchAllOrdersTab('pending')">
+                    <i class="fas fa-clock"></i> Pending
+                </button>
+                <button class="tab-order" onclick="switchAllOrdersTab('processing')">
+                    <i class="fas fa-cog"></i> Processing
+                </button>
+                <button class="tab-order" onclick="switchAllOrdersTab('approved')">
+                    <i class="fas fa-check-circle"></i> Approved
+                </button>
+                <button class="tab-order" onclick="switchAllOrdersTab('deleted')">
+                    <i class="fas fa-trash"></i> Deleted
+                </button>
+            </div>
+
+            <!-- Items Per Page Selector -->
+            <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1;"></div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="allOrdersPageSizeSelect" style="font-weight: 600; color: var(--text-primary);">Items per page:</label>
+                    <select id="allOrdersPageSizeSelect" onchange="changeAllOrdersItemsPerPage(this.value)" 
+                        style="padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px; cursor: pointer;">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- All Orders Table -->
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="orderId">Order ID</th>
+                            <th data-i18n="group">Group</th>
+                            <th data-i18n="user">User</th>
+                            <th data-i18n="phone">ID/Number</th>
+                            <th data-i18n="diamonds">Diamonds</th>
+                            <th data-i18n="amount">Amount</th>
+                            <th data-i18n="status">Status</th>
+                            <th data-i18n="date">Date/Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allOrdersTableBody">
+                        <tr><td colspan="8" class="loading" data-i18n="loading">Loading all orders...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div id="allOrdersPagination" class="pagination"></div>
         </div>
 
         <!-- Transactions View -->

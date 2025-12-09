@@ -1,0 +1,185 @@
+🧪 DATE ROLLOVER TEST MODE - QUICK START
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ WHAT'S NEW:
+• Test Mode enabled: 1 minute = 1 day (for rapid testing)
+• Instead of waiting 24 hours, wait only 1 minute!
+• Orders will automatically move from "Today" to "Yesterday" after 60 seconds
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 HOW TO TEST:
+
+Step 1: Open Admin Panel
+  └─ Go to: http://localhost:3000/dashboard.html
+
+Step 2: Enable Test Mode
+  └─ Open Browser Console (Press F12)
+  └─ Type: toggleTestMode()
+  └─ Press Enter
+
+Step 3: View Orders
+  └─ Go to Orders tab
+  └─ Click "Today" filter
+  └─ You should see the 3 test orders:
+     • Order 1: 500 💎 (Pending)
+     • Order 2: 300 💎 (Approved)
+     • Order 3: 1000 💎 (Processing)
+
+Step 4: Wait 1 Minute ⏱️
+  └─ Just wait... the system is counting down
+  └─ You'll see: ⏱️ 60s elapsed • (progress dots)
+  └─ After 60 seconds, you'll get notification:
+     "🧪 [TEST] 1 minute passed! Today's orders moved to Yesterday."
+
+Step 5: Check "Yesterday"
+  └─ Click "Yesterday" filter
+  └─ Our 3 test orders should now appear there! ✨
+  └─ "Today" should be EMPTY
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔍 CONSOLE OUTPUT (What you'll see):
+
+BEFORE TEST MODE:
+  [DATE ROLLOVER] 📅 System initialized for date: Wed Dec 10 2025
+  [DATE ROLLOVER] ✨ Monitoring for date changes...
+
+AFTER toggleTestMode():
+  ✅ TEST MODE ENABLED - 1 minute = 1 day
+  📝 Instructions:
+    • Go to Orders tab
+    • Click "Today" filter - you should see the test orders
+    • Wait 1 minute...
+    • Orders will automatically move to "Yesterday"
+    • Type toggleTestMode() again to disable
+
+AFTER 1 MINUTE:
+  [TEST MODE] ⏱️  10s elapsed •
+  [TEST MODE] ⏱️  20s elapsed ••
+  [TEST MODE] ⏱️  30s elapsed •••
+  [TEST MODE] ⏱️  40s elapsed ••••
+  [TEST MODE] ⏱️  50s elapsed •••••
+  [TEST MODE] ⏱️  60s elapsed ••••••
+  
+  [DATE CHANGE] 📅 Date transition detected! Changed from Wed Dec 10 2025 to Thu Dec 11 2025
+  [DATE CHANGE] ✨ "Today" orders have automatically moved to "Yesterday" view
+  [DATE CHANGE] 🔄 Refreshing all order displays with new date filters...
+  [DATE CHANGE] ✅ Orders tab refreshed
+  [DATE CHANGE] ✅ All Orders tab refreshed
+  [DATE CHANGE] ✅ Group details refreshed
+
+═══════════════════════════════════════════════════════════════════════════════
+
+⚙️ WHAT HAPPENS DURING 1 MINUTE:
+
+Time 0s:
+  lastKnownDate = "Wed Dec 10 2025"
+  Test Mode: Counting...
+
+Time 60s:
+  lastKnownDate becomes = "Thu Dec 11 2025"
+  System triggers date change event
+  ├─ loadOrdersNew() - refreshes Orders tab
+  ├─ loadAllGroupOrders() - refreshes All Orders tab
+  ├─ loadGroupDetails() - refreshes statistics
+  └─ showNotification() - shows popup
+
+Database: ✅ UNCHANGED (no data modified, only display updated)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 WHAT TO VERIFY:
+
+1. ✅ Before 1 minute (time 0-59s):
+   - "Today" filter: Shows 3 test orders
+   - "Yesterday" filter: Empty or shows yesterday's orders
+
+2. ✅ After 1 minute (time 60s):
+   - System shows notification
+   - "Today" filter: EMPTY (new day)
+   - "Yesterday" filter: Shows our 3 test orders ✨
+
+3. ✅ Console shows:
+   - Date transition message
+   - All refresh confirmations
+   - No errors
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🧪 TEST MODE COMMANDS (in Browser Console):
+
+Enable Test Mode:
+  └─ toggleTestMode()
+
+Disable Test Mode:
+  └─ toggleTestMode() (again)
+
+Check Current Status:
+  └─ console.log('Test Mode:', testModeEnabled);
+  └─ console.log('Last Known Date:', lastKnownDate);
+
+═══════════════════════════════════════════════════════════════════════════════
+
+⏱️ TIMELINE VISUALIZATION:
+
+Second 0:    START TEST
+             lastKnownDate = Wed Dec 10 2025
+             System counting...
+             
+Second 10:   [TEST MODE] ⏱️  10s elapsed •
+             
+Second 20:   [TEST MODE] ⏱️  20s elapsed ••
+             
+Second 30:   [TEST MODE] ⏱️  30s elapsed •••
+             
+Second 40:   [TEST MODE] ⏱️  40s elapsed ••••
+             
+Second 50:   [TEST MODE] ⏱️  50s elapsed •••••
+             
+Second 60:   ⚡ DATE CHANGE EVENT TRIGGERED!
+             lastKnownDate = Thu Dec 11 2025
+             All displays refresh
+             Notification shown
+             Orders move from Today → Yesterday
+
+═══════════════════════════════════════════════════════════════════════════════
+
+❓ FAQ:
+
+Q: What if I don't see orders move after 1 minute?
+A: • Check browser console (F12) for errors
+   • Make sure you clicked toggleTestMode()
+   • Make sure Orders are in "Today" view
+   • Refresh page and try again
+
+Q: Can I use this in production?
+A: No! Test mode is ONLY for testing:
+   • Disable with toggleTestMode() before going live
+   • Production mode waits for actual midnight
+   • Test mode simulates 1 minute = 1 day
+
+Q: Will test mode affect my data?
+A: No! Test mode only:
+   • Changes when date filters refresh
+   • Does NOT modify any database
+   • Does NOT change order timestamps
+   • Simply refreshes display
+
+Q: How do I know test mode is active?
+A: Look in console:
+   • You'll see: "[DATE ROLLOVER] 🧪 ⚠️ TEST MODE ACTIVE"
+   • Or check: toggleTestMode() shows current status
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎬 READY TO TEST?
+
+1. Open: http://localhost:3000/dashboard.html
+2. Press F12 (open console)
+3. Type: toggleTestMode()
+4. Go to Orders tab
+5. Click "Today" filter
+6. Wait 1 minute and watch the magic happen! ✨
+
+═══════════════════════════════════════════════════════════════════════════════

@@ -1,3 +1,249 @@
+// 📅 Daily Date Rollover System - Automatically refresh date filters when midnight hits
+// 🧪 TEST MODE: 1 minute = 1 day (for rapid testing)
+let lastKnownDate = new Date().toDateString();
+let dateCheckInterval = null;
+let testModeEnabled = localStorage.getItem('testModeDateRollover') === 'true';
+let secondsElapsed = 0;
+let countdownActive = false;
+let countdownDisplayInterval = null;
+let nextUpdateTime = null;
+
+// 🚀 DISABLE TEST MODE ON PAGE LOAD - PRODUCTION 24-HOUR MODE
+if (testModeEnabled) {
+    console.log('\n═══════════════════════════════════════════════════════════');
+    console.log('🔄 DISABLING TEST MODE - SWITCHING TO PRODUCTION 24-HOUR MODE');
+    console.log('═══════════════════════════════════════════════════════════\n');
+    localStorage.setItem('testModeDateRollover', 'false');
+    testModeEnabled = false;
+}
+
+function initializeDailyRollover() {
+    console.log(`[DATE ROLLOVER] 📅 System initialized for date: ${lastKnownDate}`);
+    
+    if (testModeEnabled) {
+        console.log('[DATE ROLLOVER] 🧪 ⚠️  TEST MODE ACTIVE - 1 minute = 1 day');
+        console.log('[DATE ROLLOVER] 🧪 Orders will move to Yesterday after 1 minute');
+        console.log('[DATE ROLLOVER] 🧪 Type in console: toggleTestMode() to disable test mode');
+        startCountdown();
+    } else {
+        console.log('[DATE ROLLOVER] ✨ PRODUCTION MODE - 24 HOUR CYCLE');
+        console.log('[DATE ROLLOVER] ✨ Monitoring for date changes - orders will automatically transition from Today to Yesterday at midnight');
+        startProductionMode();
+        updateCountdownDisplay();
+    }
+}
+
+// Test mode countdown - updates every second
+function startCountdown() {
+    if (countdownActive) return; // Prevent multiple intervals
+    countdownActive = true;
+    secondsElapsed = 0;
+    
+    console.log('\n⏱️  TEST MODE COUNTDOWN STARTED - WAIT 60 SECONDS\n');
+    
+    dateCheckInterval = setInterval(() => {
+        secondsElapsed++;
+        
+        // Create visual progress bar
+        const totalBars = 30;
+        const filledBars = Math.floor((secondsElapsed / 60) * totalBars);
+        const emptyBars = totalBars - filledBars;
+        const progressBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
+        const percentage = Math.round((secondsElapsed / 60) * 100);
+        
+        // Clear previous line and show new countdown
+        console.clear();
+        console.log(`\n⏱️  TEST MODE COUNTDOWN\n`);
+        console.log(`Progress: [${progressBar}] ${percentage}%`);
+        console.log(`Time: ${secondsElapsed}s / 60s`);
+        console.log(`\nWaiting for date transition...`);
+        
+        if (secondsElapsed >= 60) {
+            clearInterval(dateCheckInterval);
+            countdownActive = false;
+            simulateDateChange();
+        }
+    }, 1000); // Update every 1 second
+}
+
+// Production mode - checks every 60 seconds
+function startProductionMode() {
+    if (dateCheckInterval) clearInterval(dateCheckInterval);
+    if (countdownDisplayInterval) clearInterval(countdownDisplayInterval);
+    
+    // Calculate next midnight
+    calculateNextMidnight();
+    
+    // Update countdown display every second
+    countdownDisplayInterval = setInterval(updateCountdownDisplay, 1000);
+    
+    // Check for date change every 60 seconds
+    dateCheckInterval = setInterval(() => {
+        const currentDate = new Date().toDateString();
+        if (currentDate !== lastKnownDate) {
+            simulateDateChange();
+        }
+    }, 60000); // Check every 60 seconds
+}
+
+// Calculate next midnight
+function calculateNextMidnight() {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    nextUpdateTime = tomorrow;
+}
+
+// Update countdown display in navbar
+function updateCountdownDisplay() {
+    const countdownElement = document.getElementById('countdownText');
+    if (!countdownElement) return;
+    
+    if (!nextUpdateTime) {
+        calculateNextMidnight();
+    }
+    
+    const now = new Date();
+    const diff = nextUpdateTime - now;
+    
+    if (diff <= 0) {
+        calculateNextMidnight();
+        return;
+    }
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    let displayText = '';
+    if (hours > 0) {
+        displayText = `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        displayText = `${minutes}m ${seconds}s`;
+    } else {
+        displayText = `${seconds}s`;
+    }
+    
+    countdownElement.textContent = displayText;
+    
+    // Add warning color when close to midnight
+    const countdownDisplay = document.getElementById('countdownDisplay');
+    if (hours === 0 && minutes < 5) {
+        countdownDisplay.style.color = '#f59e0b';
+    } else if (hours === 0 && minutes === 0 && seconds < 30) {
+        countdownDisplay.style.color = '#ef4444';
+    } else {
+        countdownDisplay.style.color = 'var(--text-secondary)';
+    }
+}
+
+function simulateDateChange() {
+    const previousDate = lastKnownDate;
+    if (testModeEnabled) {
+        // In test mode, increment date by 1 day
+        const currentDate = new Date(lastKnownDate);
+        currentDate.setDate(currentDate.getDate() + 1);
+        lastKnownDate = currentDate.toDateString();
+    } else {
+        lastKnownDate = new Date().toDateString();
+    }
+    
+    console.clear();
+    console.log('\n╔════════════════════════════════════════════════════════╗');
+    console.log('║                                                        ║');
+    console.log('║              ✨ DATE CHANGE DETECTED! ✨               ║');
+    console.log('║                                                        ║');
+    console.log('╚════════════════════════════════════════════════════════╝\n');
+    console.log(`📅 Date transition: ${previousDate} → ${lastKnownDate}`);
+    console.log('✨ "Today" orders have automatically moved to "Yesterday" view\n');
+    console.log('[DATE CHANGE] 🔄 Refreshing all order displays with new date filters...\n');
+    
+    // Refresh all order displays WITHOUT full page reload
+    try {
+        // Refresh the Orders view
+        if (typeof loadOrdersNew === 'function') {
+            loadOrdersNew();
+            console.log('[DATE CHANGE] ✅ Orders tab refreshed');
+        }
+        
+        // Refresh All Orders view 
+        if (typeof loadAllGroupOrders === 'function') {
+            loadAllGroupOrders();
+            console.log('[DATE CHANGE] ✅ All Orders tab refreshed');
+        }
+        
+        // Refresh group details
+        if (typeof loadGroupDetails === 'function') {
+            const currentPeriod = document.querySelector('.tab-detail.active')?.getAttribute('onclick')?.match(/'(today|yesterday|weekly|monthly)'/)?.[1] || 'today';
+            loadGroupDetails(currentPeriod);
+            console.log('[DATE CHANGE] ✅ Group details refreshed');
+        }
+        
+        console.log('\n✨ All displays updated successfully!\n');
+        
+        if (testModeEnabled) {
+            showNotification('🧪 [TEST] 1 minute passed! Today\'s orders moved to Yesterday.', 'info');
+            console.log('[DATE CHANGE] 🧪 Restarting countdown for next minute...\n');
+            // Restart countdown for next test
+            startCountdown();
+        } else {
+            showNotification('📅 Midnight! Today\'s orders moved to Yesterday. Displays updated.', 'info');
+        }
+    } catch (error) {
+        console.error('[DATE CHANGE] Error refreshing displays:', error);
+        showNotification('📅 Date changed - reloading for full sync...', 'info');
+        setTimeout(() => location.reload(), 2000);
+    }
+}
+
+// 🧪 Test Mode Toggle Function
+function toggleTestMode() {
+    testModeEnabled = !testModeEnabled;
+    localStorage.setItem('testModeDateRollover', testModeEnabled);
+    
+    // Clear any existing interval
+    if (dateCheckInterval) {
+        clearInterval(dateCheckInterval);
+        dateCheckInterval = null;
+        countdownActive = false;
+    }
+    
+    console.clear();
+    
+    if (testModeEnabled) {
+        console.log('\n╔════════════════════════════════════════════════════════╗');
+        console.log('║                                                        ║');
+        console.log('║             ✅ TEST MODE ENABLED! ✅                  ║');
+        console.log('║                                                        ║');
+        console.log('║              1 Minute = 1 Day                         ║');
+        console.log('║                                                        ║');
+        console.log('╚════════════════════════════════════════════════════════╝\n');
+        console.log('📝 INSTRUCTIONS:\n');
+        console.log('  1. Go to Orders tab');
+        console.log('  2. Click "Today" filter');
+        console.log('  3. You should see the 3 test orders');
+        console.log('  4. Watch console below...');
+        console.log('  5. After 60 seconds, orders will move to "Yesterday"\n');
+        console.log('To disable: type toggleTestMode() again\n');
+        
+        showNotification('🧪 TEST MODE ENABLED - Countdown starts now!', 'info');
+        startCountdown();
+    } else {
+        console.log('\n╔════════════════════════════════════════════════════════╗');
+        console.log('║                                                        ║');
+        console.log('║          ❌ TEST MODE DISABLED ❌                     ║');
+        console.log('║                                                        ║');
+        console.log('║        Back to Production Mode                        ║');
+        console.log('║        Waiting for actual midnight...                 ║');
+        console.log('║                                                        ║');
+        console.log('╚════════════════════════════════════════════════════════╝\n');
+        
+        showNotification('❌ TEST MODE DISABLED - Production mode active', 'info');
+        startProductionMode();
+    }
+}
+
 // Authentication Check
 function checkAuthentication() {
     const token = localStorage.getItem('adminToken');
@@ -239,11 +485,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initTheme();
+    initLanguage();
     initSocketListeners();
     loadDashboardData();
     
     // Load initial data
     refreshData();
+
+    // Initialize daily date rollover system
+    initializeDailyRollover();
 
     // Restore previous view if saved
     const savedView = localStorage.getItem('currentView');
@@ -257,6 +507,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize global input focus tracking with event delegation
     initGlobalInputTracking();
+});
+
+// Cleanup function to clear intervals on page unload
+window.addEventListener('beforeunload', () => {
+    if (dateCheckInterval) clearInterval(dateCheckInterval);
+    if (ordersPollingInterval) clearInterval(ordersPollingInterval);
+    console.log('[CLEANUP] ✅ All intervals cleared');
 });
 
 // Global Input Focus Tracking (Event Delegation - persists across page reloads)
@@ -280,8 +537,13 @@ function initGlobalInputTracking() {
 // Theme Management
 function initTheme() {
     if (currentTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
         document.body.setAttribute('data-theme', 'light');
         document.querySelector('#themeToggle i').className = 'fas fa-sun';
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        document.body.removeAttribute('data-theme');
+        document.querySelector('#themeToggle i').className = 'fas fa-moon';
     }
 }
 
@@ -290,18 +552,177 @@ document.getElementById('themeToggle').addEventListener('click', () => {
     localStorage.setItem('theme', currentTheme);
     
     if (currentTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
         document.body.setAttribute('data-theme', 'light');
         document.querySelector('#themeToggle i').className = 'fas fa-sun';
     } else {
+        document.documentElement.removeAttribute('data-theme');
         document.body.removeAttribute('data-theme');
         document.querySelector('#themeToggle i').className = 'fas fa-moon';
     }
 });
 
+// Language Translations
+const translations = {
+    bn: {
+        // Navigation & Main
+        'dashboard': 'ড্যাশবোর্ড',
+        'groups': 'গ্রুপ',
+        'orders': 'অর্ডার',
+        'users': 'ব্যবহারকারী',
+        'settings': 'সেটিংস',
+        'logout': 'লগআউট',
+        'home': 'হোম',
+        'allOrders': 'সমস্ত অর্ডার',
+        
+        // Buttons
+        'add': 'যোগ করুন',
+        'edit': 'সম্পাদনা করুন',
+        'delete': 'মুছুন',
+        'save': 'সংরক্ষণ করুন',
+        'cancel': 'বাতিল করুন',
+        'approve': 'অনুমোদন করুন',
+        'reject': 'প্রত্যাখ্যান করুন',
+        'restore': 'পুনরুদ্ধার করুন',
+        'permanent': 'চিরস্থায়ী',
+        'refresh': 'রিফ্রেশ করুন',
+        
+        // Status
+        'pending': 'অপেক্ষমাণ',
+        'processing': 'প্রক্রিয়াকরণ',
+        'approved': 'অনুমোদিত',
+        'rejected': 'প্রত্যাখ্যাত',
+        'deleted': '❌ মুছে ফেলা হয়েছে',
+        
+        // Labels
+        'phone': 'ফোন',
+        'name': 'নাম',
+        'user': 'ব্যবহারকারী',
+        'group': 'গ্রুপ',
+        'orderId': 'অর্ডার আইডি',
+        'diamonds': 'হীরা',
+        'amount': 'পরিমাণ',
+        'status': 'অবস্থা',
+        'date': 'তারিখ',
+        'time': 'সময়',
+        'actions': 'পদক্ষেপ',
+        'search': 'অনুসন্ধান করুন',
+        'itemsPerPage': 'প্রতি পৃষ্ঠায় আইটেম',
+        'all': 'সব',
+        
+        // Messages
+        'noData': 'কোনো ডেটা পাওয়া যায়নি',
+        'loading': 'লোড হচ্ছে...',
+        'success': 'সফল',
+        'error': 'ত্রুটি',
+        'confirm': 'নিশ্চিত করুন',
+        'areYouSure': 'আপনি কি নিশ্চিত?',
+    },
+    en: {
+        // Navigation & Main
+        'dashboard': 'Dashboard',
+        'groups': 'Groups',
+        'orders': 'Orders',
+        'users': 'Users',
+        'settings': 'Settings',
+        'logout': 'Logout',
+        'home': 'Home',
+        'allOrders': 'All Orders',
+        
+        // Buttons
+        'add': 'Add',
+        'edit': 'Edit',
+        'delete': 'Delete',
+        'save': 'Save',
+        'cancel': 'Cancel',
+        'approve': 'Approve',
+        'reject': 'Reject',
+        'restore': 'Restore',
+        'permanent': 'Permanent',
+        'refresh': 'Refresh',
+        
+        // Status
+        'pending': 'Pending',
+        'processing': 'Processing',
+        'approved': 'Approved',
+        'rejected': 'Rejected',
+        'deleted': '❌ DELETED',
+        
+        // Labels
+        'phone': 'Phone',
+        'name': 'Name',
+        'user': 'User',
+        'group': 'Group',
+        'orderId': 'Order ID',
+        'diamonds': 'Diamonds',
+        'amount': 'Amount',
+        'status': 'Status',
+        'date': 'Date',
+        'time': 'Time',
+        'actions': 'Actions',
+        'search': 'Search',
+        'itemsPerPage': 'Items per page',
+        'all': 'All',
+        
+        // Messages
+        'noData': 'No data found',
+        'loading': 'Loading...',
+        'success': 'Success',
+        'error': 'Error',
+        'confirm': 'Confirm',
+        'areYouSure': 'Are you sure?',
+    }
+};
+
+// Function to get translated text
+function t(key) {
+    return translations[currentLang]?.[key] || key;
+}
+
+// Function to update page language
+function updatePageLanguage() {
+    // Update HTML lang attribute
+    document.documentElement.lang = currentLang;
+    
+    // Update all elements with data-i18n attribute
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        element.textContent = t(key);
+    });
+    
+    // Update all elements with data-i18n-placeholder attribute
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+        const key = element.getAttribute('data-i18n-placeholder');
+        element.placeholder = t(key);
+    });
+    
+    // Update common UI elements by ID
+    const uiMappings = {
+        'homeView': { selector: 'h1', key: 'home' },
+        'allOrdersView': { selector: 'h1', key: 'allOrders' },
+    };
+    
+    // Save to localStorage
+    localStorage.setItem('language', currentLang);
+    
+    // Dispatch custom event for components to listen
+    window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang: currentLang } }));
+}
+
+// Initialize language from localStorage
+function initLanguage() {
+    const savedLang = localStorage.getItem('language');
+    if (savedLang && (savedLang === 'bn' || savedLang === 'en')) {
+        currentLang = savedLang;
+    }
+    updatePageLanguage();
+}
+
 // Language Toggle
 document.getElementById('langToggle').addEventListener('click', () => {
     currentLang = currentLang === 'bn' ? 'en' : 'bn';
-    showToast(currentLang === 'bn' ? 'Language: Bangla' : 'Language: English', 'success');
+    updatePageLanguage();
+    showToast(currentLang === 'bn' ? '🇧🇩 বাংলা' : '🇬🇧 English', 'success');
 });
 
 // Socket.IO Listeners
@@ -521,11 +942,34 @@ function showView(viewId) {
     // Show selected view
     document.getElementById(viewId).classList.add('active');
 
-    // Update bottom nav
+    // Update bottom nav - only if event exists (called from click)
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    event.target.closest('.nav-item').classList.add('active');
+    
+    // Only update nav item if we have an event (click-triggered)
+    if (typeof event !== 'undefined' && event && event.target) {
+        const navItem = event.target.closest('.nav-item');
+        if (navItem) {
+            navItem.classList.add('active');
+        }
+    } else {
+        // If called programmatically, find and activate matching nav item
+        const navItems = {
+            'homeView': 'nav-home',
+            'dashboardView': 'nav-dashboard',
+            'groupsView': 'nav-groups',
+            'ordersView': 'nav-orders',
+            'allOrdersView': 'nav-all-orders',
+            'offlineOrdersView': 'nav-offline-orders',
+            'transactionsView': 'nav-transactions'
+        };
+        
+        if (navItems[viewId]) {
+            const navItem = document.querySelector(`[data-nav="${navItems[viewId]}"]`);
+            if (navItem) navItem.classList.add('active');
+        }
+    }
 
     // Save current view to localStorage
     localStorage.setItem('currentView', viewId);
@@ -541,6 +985,8 @@ function showView(viewId) {
         enableOrdersPolling(); // Start real-time polling
     } else if (viewId === 'offlineOrdersView') {
         loadOfflineOrders(); // Load all offline orders
+    } else if (viewId === 'allOrdersView') {
+        loadAllGroupOrders(); // Load all orders from all groups
     }
 }
 // Refresh All Data
@@ -1085,6 +1531,7 @@ async function loadGroups() {
                         <input type="checkbox" class="checkbox-select" value="${group.id}" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleGroupSelection('${group.id}')">
                         <i class="fas fa-users"></i>
                         <span>${group.name}</span>
+                        ${group.pendingOrders > 0 ? `<span class="pending-badge">${group.pendingOrders}</span>` : ''}
                     </div>
                     <div class="group-info-quick">
                         <div class="quick-info-item">
@@ -1210,67 +1657,12 @@ async function loadGroups() {
                     </div>
                     ` : ''}
                     
-                    <!-- Orders Table with Time Filters -->
+                    <!-- View All Orders Button -->
                     <div class="dashboard-section" style="margin-top: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px;">
-                            <h4 style="margin: 0;"><i class="fas fa-list"></i> All Orders</h4>
-                            <div class="time-filters">
-                                <button class="filter-btn active" onclick="filterGroupOrders('${group.id}', 'all')">All</button>
-                                <button class="filter-btn" onclick="filterGroupOrders('${group.id}', 'today')">Today</button>
-                                <button class="filter-btn" onclick="filterGroupOrders('${group.id}', 'yesterday')">Yesterday</button>
-                                <button class="filter-btn" onclick="filterGroupOrders('${group.id}', 'week')">This Week</button>
-                                <button class="filter-btn" onclick="filterGroupOrders('${group.id}', 'month')">This Month</button>
-                            </div>
-                        </div>
-                        
-                        <div id="ordersTable-${group.id}">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Order ID</th>
-                                        <th>User</th>
-                                        <th>Diamonds</th>
-                                        <th>Amount</th>
-                                        <th>Status</th>
-                                        <th>Date/Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="ordersTableBody-${group.id}">
-                                    ${group.entries && group.entries.length > 0 ? group.entries.map(order => `
-                                        <tr>
-                                            <td><strong>#${order.id}</strong></td>
-                                            <td>${order.userName || order.userId}</td>
-                                            <td><strong>${order.diamonds} 💎</strong></td>
-                                            <td>৳${(order.diamonds * (group.rate || 100)).toLocaleString()}</td>
-                                            <td>
-                                                <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;
-                                                    background: ${order.status === 'approved' ? '#43e97b33' : order.status === 'pending' ? '#f5576c33' : order.status === 'processing' ? '#feca5733' : '#4facfe33'};
-                                                    color: ${order.status === 'approved' ? '#43e97b' : order.status === 'pending' ? '#f5576c' : order.status === 'processing' ? '#feca57' : '#4facfe'};">
-                                                    ${order.status.toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td>${new Date(order.createdAt).toLocaleString()}</td>
-                                        </tr>
-                                    `).join('') : `
-                                        <tr>
-                                            <td colspan="6" style="padding: 20px; text-align: center; color: var(--text-secondary);">
-                                                <i class="fas fa-inbox"></i> No orders found
-                                            </td>
-                                        </tr>
-                                    `}
-                                </tbody>
-                                <tfoot id="ordersTotalRow-${group.id}">
-                                    <tr class="table-footer-row">
-                                        <td colspan="2" style="text-align: right; font-weight: 700;"><strong>📊 TOTAL:</strong></td>
-                                        <td><strong id="totalDiamonds-${group.id}">0 💎</strong></td>
-                                        <td><strong id="totalAmount-${group.id}">৳0</strong></td>
-                                        <td colspan="2" style="text-align: center; font-size: 0.85rem; color: var(--text-secondary);">
-                                            <span id="totalOrders-${group.id}">0 orders</span>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                        <button class="btn-view-all-orders" onclick="showGroupOrders('${group.id}', '${group.name}')" style="width: 100%; padding: 15px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1.1rem; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+                            <i class="fas fa-list"></i> View All Orders from This Group
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
                     </div>
                     
                     <!-- Rate Control -->
@@ -1366,6 +1758,24 @@ function toggleGroupSelection(groupId) {
     } else {
         selectedGroups.add(groupId);
     }
+    updateToggleButton();
+}
+
+// Update toggle select/deselect button state
+function updateToggleButton() {
+    const btn = document.getElementById('toggleSelectBtn');
+    if (!btn) return;
+    
+    const icon = btn.querySelector('i');
+    const allSelected = selectedGroups.size === allGroups.length && allGroups.length > 0;
+    
+    if (allSelected) {
+        btn.classList.add('btn-deselect');
+        btn.innerHTML = '<i class="fas fa-times-square"></i> Deselect All';
+    } else {
+        btn.classList.remove('btn-deselect');
+        btn.innerHTML = '<i class="fas fa-check-square"></i> Select All';
+    }
 }
 
 // Filter Group Orders by Time Period with Pagination
@@ -1377,6 +1787,9 @@ function filterGroupOrders(groupId, timeFilter, page = 1) {
     // Get the parent dashboard section
     const dashboardSection = tbody.closest('.dashboard-section');
     if (!dashboardSection) return;
+
+    // Get items per page setting for this group (default: 10)
+    const itemsPerPage = groupItemsPerPage.get(groupId) || 10;
 
     // Update active button styling
     const buttons = dashboardSection.querySelectorAll('.filter-btn');
@@ -1409,7 +1822,6 @@ function filterGroupOrders(groupId, timeFilter, page = 1) {
     let totalAmount = 0;
     let visibleCount = 0;
     let filteredRows = [];
-    const itemsPerPage = 10;
 
     rows.forEach((row, index) => {
         const dateCell = row.querySelector('td:last-child');
@@ -1462,8 +1874,8 @@ function filterGroupOrders(groupId, timeFilter, page = 1) {
     // Calculate total pages
     const totalPages = Math.ceil(visibleCount / itemsPerPage);
 
-    // Update pagination
-    updatePagination(groupId, totalPages, page, timeFilter);
+    // Update pagination with per-page selector
+    updatePagination(groupId, totalPages, page, timeFilter, itemsPerPage, visibleCount);
 
     // Update footer totals
     const totalDiamondsEl = document.getElementById(`totalDiamonds-${groupId}`);
@@ -1477,22 +1889,63 @@ function filterGroupOrders(groupId, timeFilter, page = 1) {
     console.log(`[GROUP ORDERS] Filtered to ${visibleCount} orders (${timeFilter}) | Page ${page}/${totalPages} | Total: ৳${totalAmount.toLocaleString()}`);
 }
 
+// Change items per page for a group
+function changeItemsPerPage(groupId, itemsPerPage, timeFilter) {
+    groupItemsPerPage.set(groupId, parseInt(itemsPerPage));
+    filterGroupOrders(groupId, timeFilter, 1); // Reset to page 1
+}
+
 // Update Pagination Controls
-function updatePagination(groupId, totalPages, currentPage, timeFilter) {
-    let paginationContainer = document.getElementById(`pagination-${groupId}`);
+function updatePagination(groupId, totalPages, currentPage, timeFilter, itemsPerPage = 10, totalItems = 0) {
+    let paginationRow = document.getElementById(`pagination-row-${groupId}`);
     
-    // Create pagination container if it doesn't exist
-    if (!paginationContainer) {
-        const table = document.querySelector(`#ordersTable-${groupId} table`);
-        if (!table) return;
+    // Create pagination row if it doesn't exist
+    if (!paginationRow) {
+        const tfoot = document.getElementById(`ordersTotalRow-${groupId}`);
+        if (!tfoot) return;
         
-        paginationContainer = document.createElement('div');
+        paginationRow = document.createElement('tr');
+        paginationRow.id = `pagination-row-${groupId}`;
+        paginationRow.className = 'pagination-row';
+        
+        const cell = document.createElement('td');
+        cell.colSpan = 7;
+        cell.style.padding = '0';
+        cell.style.border = 'none';
+        
+        const paginationContainer = document.createElement('div');
         paginationContainer.id = `pagination-${groupId}`;
         paginationContainer.className = 'pagination-container';
-        table.parentNode.insertBefore(paginationContainer, table.nextSibling);
+        
+        cell.appendChild(paginationContainer);
+        paginationRow.appendChild(cell);
+        tfoot.appendChild(paginationRow);
     }
+    
+    const paginationContainer = document.getElementById(`pagination-${groupId}`);
+    if (!paginationContainer) return;
 
     let html = '';
+    
+    // Per-page selector with better mobile layout
+    html += `
+        <div class="pagination-selector">
+            <span style="font-size: 0.9rem; font-weight: 600;">📄 Show:</span>
+            <select onchange="changeItemsPerPage('${groupId}', this.value, '${timeFilter}')" 
+                    style="padding: 8px 12px; background: var(--card-bg); color: var(--text-primary); border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; min-width: 90px;">
+                <option value="10" ${itemsPerPage === 10 ? 'selected' : ''}>10</option>
+                <option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option>
+                <option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option>
+                <option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option>
+                <option value="999999" ${itemsPerPage === 999999 ? 'selected' : ''}>All</option>
+            </select>
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--primary-color);">per page</span>
+            <span style="font-size: 0.85rem; padding: 4px 10px; background: rgba(102, 126, 234, 0.15); border-radius: 6px; color: var(--text-primary); font-weight: 600;">📊 ${totalItems} total</span>
+        </div>
+    `;
+    
+    // Pagination buttons container
+    html += `<div class="pagination-buttons-container">`;
 
     // Previous button
     if (currentPage > 1) {
@@ -1530,6 +1983,8 @@ function updatePagination(groupId, totalPages, currentPage, timeFilter) {
     if (currentPage < totalPages) {
         html += `<button class="pagination-btn" onclick="filterGroupOrders('${groupId}', '${timeFilter}', ${currentPage + 1})">Next →</button>`;
     }
+    
+    html += `</div>`; // Close pagination buttons container
 
     paginationContainer.innerHTML = html;
 }
@@ -2748,6 +3203,8 @@ function displayOrdersByStatus(status) {
                 return o.status === 'processing';
             } else if (status === 'approved') {
                 return o.status === 'approved';
+            } else if (status === 'deleted') {
+                return o.status === 'deleted';
             }
             return true;
         });
@@ -2758,7 +3215,8 @@ function displayOrdersByStatus(status) {
         'all': 'ordersTableNew',
         'pending': 'ordersTablePending',
         'processing': 'ordersTableProcessing',
-        'approved': 'ordersTableApproved'
+        'approved': 'ordersTableApproved',
+        'deleted': 'ordersTableDeleted'
     };
 
     const tableId = tableIds[status];
@@ -2934,6 +3392,330 @@ async function restoreOrder(orderId) {
     }
 }
 
+// ============================================
+// ALL ORDERS VIEW FUNCTIONS
+// ============================================
+
+// Show orders for a specific group
+async function showGroupOrders(groupId, groupName) {
+    try {
+        const response = await fetch('/api/groups');
+        const groups = await response.json();
+
+        // Find the group
+        const group = groups.find(g => g.id === groupId);
+        if (!group || !group.entries) {
+            showNotification('❌ Group not found', 'error');
+            return;
+        }
+
+        // Update view header with group name
+        const viewHeader = document.querySelector('#allOrdersView .view-header h1');
+        if (viewHeader) {
+            viewHeader.innerHTML = `<i class="fas fa-list"></i> Orders from ${groupName}`;
+        }
+
+        // Store group-specific orders
+        let groupOrders = [];
+        for (const order of group.entries) {
+            groupOrders.push({
+                ...order,
+                groupId: group.id,
+                groupName: group.name
+            });
+        }
+
+        // Sort by date (newest first)
+        groupOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Store globally
+        window.allGroupOrders = groupOrders;
+        window.currentGroupId = groupId;
+        window.currentGroupName = groupName;
+
+        if (groupOrders.length === 0) {
+            const tbody = document.getElementById('allOrdersTableBody');
+            tbody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);"><i class="fas fa-inbox"></i> No orders found in this group</td></tr>`;
+            document.getElementById('allOrdersPagination').innerHTML = '';
+        } else {
+            // Display first page
+            displayAllOrdersPage(1);
+            updateAllOrdersPagination(groupOrders);
+        }
+
+        // Switch to view
+        showView('allOrdersView');
+        console.log(`✅ Loaded ${groupOrders.length} orders from group: ${groupName}`);
+    } catch (error) {
+        console.error('Error loading group orders:', error);
+        showNotification('❌ Error loading orders', 'error');
+    }
+}
+
+// Load all orders from all groups
+async function loadAllGroupOrders() {
+    try {
+        const tbody = document.getElementById('allOrdersTableBody');
+        if (!tbody) return;
+
+        // Reset header
+        const viewHeader = document.querySelector('#allOrdersView .view-header h1');
+        if (viewHeader) {
+            viewHeader.innerHTML = `<i class="fas fa-list"></i> All Orders`;
+        }
+
+        // Initialize items per page to default 10
+        window.itemsPerPage = 10;
+        window.currentAllOrdersPage = 1;
+
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading all orders...</td></tr>';
+
+        const response = await fetch('/api/groups');
+        const groups = await response.json();
+
+        let allOrders = [];
+
+        // Collect all orders from all groups
+        for (const group of groups) {
+            if (group.entries && group.entries.length > 0) {
+                for (const order of group.entries) {
+                    allOrders.push({
+                        ...order,
+                        groupId: group.id,
+                        groupName: group.name
+                    });
+                }
+            }
+        }
+
+        // Sort by date (newest first)
+        allOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Clear group filter
+        window.currentGroupId = null;
+        window.currentGroupName = null;
+
+        // Store all orders globally
+        window.allGroupOrders = allOrders;
+
+        if (allOrders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);"><i class="fas fa-inbox"></i> No orders found</td></tr>';
+            document.getElementById('allOrdersPagination').innerHTML = '';
+            return;
+        }
+
+        // Display first page
+        displayAllOrdersPage(1);
+        updateAllOrdersPagination(allOrders);
+
+        console.log(`✅ Loaded ${allOrders.length} orders from ${groups.length} groups`);
+    } catch (error) {
+        console.error('Error loading all orders:', error);
+        showNotification('❌ Error loading orders', 'error');
+    }
+}
+
+// Display orders on a specific page
+function displayAllOrdersPage(page) {
+    const tbody = document.getElementById('allOrdersTableBody');
+    if (!tbody) return;
+
+    // Use filtered orders if available, otherwise use all orders
+    const ordersToUse = window.filteredAllOrders || window.allGroupOrders || [];
+    
+    if (ordersToUse.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);"><i class="fas fa-inbox"></i> No orders found</td></tr>';
+        document.getElementById('allOrdersPagination').innerHTML = '';
+        return;
+    }
+
+    // Get items per page from window variable (default 10)
+    const itemsPerPage = window.itemsPerPage || 10;
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const ordersToDisplay = ordersToUse.slice(startIndex, endIndex);
+
+    tbody.innerHTML = ordersToDisplay.map(order => {
+        const date = new Date(order.createdAt);
+        const formattedDate = date.toLocaleString();
+
+        const statusColors = {
+            'approved': '#10b981',
+            'pending': '#f59e0b',
+            'processing': '#3b82f6',
+            'rejected': '#ef4444'
+        };
+
+        const statusBg = {
+            'approved': '#10b98133',
+            'pending': '#f59e0b33',
+            'processing': '#3b82f633',
+            'rejected': '#ef444433'
+        };
+
+        const statusColor = statusColors[order.status] || '#4facfe';
+        const statusBgColor = statusBg[order.status] || '#4facfe33';
+
+        return `
+            <tr>
+                <td><strong>#${order.id}</strong></td>
+                <td><span style="background: rgba(102, 126, 234, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">${order.groupName || order.groupId}</span></td>
+                <td>${order.userName || order.userId}</td>
+                <td>${(order.playerIdNumber || order.userPhone || order.playerId || order.phone || 'N/A').split('\n')[0]}</td>
+                <td><strong>${order.diamonds} 💎</strong></td>
+                <td>৳${(order.amount || order.diamonds * 100).toLocaleString()}</td>
+                <td>
+                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;
+                        background: ${statusBgColor};
+                        color: ${statusColor};">
+                        ${order.status.toUpperCase()}
+                    </span>
+                </td>
+                <td>${formattedDate}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Update pagination
+    updateAllOrdersPagination(ordersToUse);
+
+    // Store current page
+    window.currentAllOrdersPage = page;
+}
+
+// Update pagination for all orders
+function updateAllOrdersPagination(orders) {
+    const container = document.getElementById('allOrdersPagination');
+    if (!container || !orders) return;
+
+    // Get items per page from window variable (default 10)
+    const itemsPerPage = window.itemsPerPage || 10;
+    
+    // If "All" is selected, don't show pagination
+    if (itemsPerPage === 'all') {
+        container.innerHTML = '';
+        return;
+    }
+
+    const totalPages = Math.ceil(orders.length / itemsPerPage);
+
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const currentPage = window.currentAllOrdersPage || 1;
+    let html = '<div class="pagination-buttons-container">';
+
+    // Previous button
+    if (currentPage > 1) {
+        html += `<button class="pagination-btn" onclick="displayAllOrdersPage(${currentPage - 1})">← Previous</button>`;
+    }
+
+    // Page numbers
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    if (startPage > 1) {
+        html += `<button class="pagination-btn" onclick="displayAllOrdersPage(1)">1</button>`;
+        if (startPage > 2) html += `<span class="pagination-dots">...</span>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === currentPage) {
+            html += `<button class="pagination-btn active">${i}</button>`;
+        } else {
+            html += `<button class="pagination-btn" onclick="displayAllOrdersPage(${i})">${i}</button>`;
+        }
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += `<span class="pagination-dots">...</span>`;
+        html += `<button class="pagination-btn" onclick="displayAllOrdersPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    // Next button
+    if (currentPage < totalPages) {
+        html += `<button class="pagination-btn" onclick="displayAllOrdersPage(${currentPage + 1})">Next →</button>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Store current page
+    window.currentAllOrdersPage = currentPage;
+}
+
+// Switch between all orders tabs
+function switchAllOrdersTab(tabName) {
+    // Filter orders by status
+    let filteredOrders = window.allGroupOrders || [];
+
+    if (tabName !== 'all') {
+        filteredOrders = filteredOrders.filter(o => o.status === tabName);
+    }
+
+    // Update global variable
+    window.filteredAllOrders = filteredOrders;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-order').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.closest('.tab-order').classList.add('active');
+
+    // Display filtered orders
+    displayAllOrdersPage(1);
+    updateAllOrdersPagination(filteredOrders);
+}
+
+// Filter all orders by search
+function filterAllOrders() {
+    const searchInput = document.getElementById('allOrdersSearch');
+    if (!searchInput) return;
+
+    const searchTerm = searchInput.value.toLowerCase();
+    const allOrders = window.allGroupOrders || [];
+
+    let filteredOrders = allOrders.filter(order => 
+        order.id.toString().includes(searchTerm) ||
+        (order.groupName && order.groupName.toLowerCase().includes(searchTerm)) ||
+        (order.userName && order.userName.toLowerCase().includes(searchTerm)) ||
+        (order.userPhone && order.userPhone.includes(searchTerm)) ||
+        (order.playerId && order.playerId.toString().includes(searchTerm)) ||
+        order.diamonds.toString().includes(searchTerm)
+    );
+
+    window.filteredAllOrders = filteredOrders;
+    displayAllOrdersPage(1);
+    updateAllOrdersPagination(filteredOrders);
+}
+
+// Change items per page for all orders
+function changeAllOrdersItemsPerPage(pageSize) {
+    // Convert to number or string 'all'
+    if (pageSize === 'all') {
+        window.itemsPerPage = 'all';
+    } else {
+        window.itemsPerPage = parseInt(pageSize);
+    }
+
+    // Reset to page 1 and refresh display
+    window.currentAllOrdersPage = 1;
+    displayAllOrdersPage(1);
+
+    // Update dropdown selection
+    const select = document.getElementById('allOrdersPageSizeSelect');
+    if (select) {
+        select.value = pageSize;
+    }
+}
+
 // Modal Functions
 function showUsersModal() {
     fetch('/api/users')
@@ -2955,49 +3737,50 @@ function showUsersModal() {
                         <div class="modal-body">
                             <div class="search-bar">
                                 <i class="fas fa-search"></i>
-                                <input type="text" id="userSearch" placeholder="Search users..." onkeyup="filterModalTable()">
+                                <input type="text" id="userSearch" placeholder="Search by name or phone..." onkeyup="filterUserCards()">
                             </div>
-                            <div class="table-wrapper">
-                                <div class="table-container" style="max-height: 500px; overflow-y: auto;">
-                                    <table class="data-table responsive-table">
-                                        <thead>
-                                            <tr>
-                                                <th data-label="Phone">Phone</th>
-                                                <th data-label="Name">Name</th>
-                                                <th data-label="Main Balance">Main Balance</th>
-                                                <th data-label="Due Balance">Due Balance</th>
-                                                <th data-label="Status">Status</th>
-                                                <th data-label="Action">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="modalTableBody">
-                                            ${users.length > 0 ? users.map(u => `
-                                                <tr>
-                                                    <td data-label="Phone"><span class="phone-number">${u.phone}</span></td>
-                                                    <td data-label="Name">${u.name || 'N/A'}</td>
-                                                    <td data-label="Main Balance"><span class="badge-balance">৳${(u.balance || 0).toLocaleString()}</span></td>
-                                                    <td data-label="Due Balance"><span class="badge-due">৳${(u.dueBalance || 0).toLocaleString()}</span></td>
-                                                    <td data-label="Status"><span class="status-badge status-${u.status}">${u.status}</span></td>
-                                                    <td data-label="Action" class="action-cell">
-                                                        <button class="btn-info" onclick="showEditUserModal('${u.phone}')" style="padding: 5px 10px; font-size: 0.85rem;">
-                                                            <i class="fas fa-edit"></i> Edit
-                                                        </button>
-                                                        <button class="btn-${u.status === 'active' ? 'reject' : 'approve'}" 
-                                                                onclick="toggleUserBlock('${u.phone}')" style="padding: 5px 10px; font-size: 0.85rem;">
-                                                            ${u.status === 'active' ? 'Block' : 'Unblock'}
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            `).join('') : '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-secondary);">No users found</td></tr>'}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div class="users-grid-container" id="usersGridContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
+                                ${users.length > 0 ? users.map(u => `
+                                    <div class="user-card" data-phone="${u.phone}" data-name="${u.name || 'N/A'}">
+                                        <div class="user-card-header">
+                                            <div class="user-info">
+                                                <h3 class="user-name">${u.name || 'Unknown'}</h3>
+                                                <span class="user-phone">${u.phone}</span>
+                                            </div>
+                                            <button class="user-block-btn ${u.status === 'blocked' ? 'blocked' : ''}" 
+                                                    onclick="event.stopPropagation(); toggleUserBlock('${u.phone}')" 
+                                                    title="${u.status === 'active' ? 'Block user' : 'Unblock user'}">
+                                                <i class="fas fa-${u.status === 'active' ? 'lock-open' : 'lock'}"></i>
+                                            </button>
+                                        </div>
+                                        <div class="user-card-body">
+                                            <div class="user-stat">
+                                                <span class="stat-label">Main Balance</span>
+                                                <span class="stat-value">৳${(u.balance || 0).toLocaleString()}</span>
+                                            </div>
+                                            <div class="user-stat">
+                                                <span class="stat-label">Due Balance</span>
+                                                <span class="stat-value ${(u.dueBalance || 0) > 0 ? 'danger' : ''}">৳${(u.dueBalance || 0).toLocaleString()}</span>
+                                            </div>
+                                            <div class="user-stat">
+                                                <span class="stat-label">Total Orders</span>
+                                                <span class="stat-value">${u.totalOrders || 0}</span>
+                                            </div>
+                                        </div>
+                                        <div class="user-card-footer">
+                                            <button class="btn-edit-user" onclick="showEditUserModal('${u.phone}')">
+                                                <i class="fas fa-edit"></i> Edit Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('') : '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">No users found</div>'}
                             </div>
                         </div>
                     </div>
                 </div>
             `;
             document.getElementById('modalContainer').innerHTML = modal;
+
         })
         .catch(error => {
             console.error('Error fetching users:', error);
@@ -3006,67 +3789,98 @@ function showUsersModal() {
 }
 
 function showEditUserModal(phone) {
-    fetch(`/api/users/${phone}`)
-        .then(res => {
-            if (!res.ok) {
-                throw new Error('User not found');
-            }
-            return res.json();
-        })
-        .then(user => {
-            const modal = `
-                <div class="modal" onclick="closeModal(event)">
-                    <div class="modal-content edit-modal" onclick="event.stopPropagation()">
-                        <div class="modal-header">
-                            <h2><i class="fas fa-user-edit"></i> Edit User - ${user.name || 'Unknown'}</h2>
-                            <button class="modal-close" onclick="closeModal()">&times;</button>
+    Promise.all([
+        fetch(`/api/users/${phone}`).then(res => res.json()),
+        fetch('/api/groups').then(res => res.json())
+    ])
+    .then(([user, groups]) => {
+        // Find which group(s) this user belongs to
+        const userGroups = [];
+        if (Array.isArray(groups)) {
+            groups.forEach(group => {
+                if (group.entries) {
+                    const hasUser = group.entries.some(entry => 
+                        entry.userId === phone || 
+                        entry.phone === phone || 
+                        entry.userName === phone
+                    );
+                    if (hasUser) {
+                        userGroups.push({
+                            id: group.id,
+                            name: group.name
+                        });
+                    }
+                }
+            });
+        }
+
+        // If phone is found in modal context (editing from group view), use that
+        const currentGroupId = window.editingFromGroupId || (userGroups.length > 0 ? userGroups[0].id : null);
+
+        const modal = `
+            <div class="modal" onclick="closeModal(event)">
+                <div class="modal-content edit-modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-user-edit"></i> Edit User - ${user.name || 'Unknown'}</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Phone:</label>
+                            <input type="text" value="${phone}" disabled class="form-input">
                         </div>
-                        <div class="modal-body">
-                            <div class="form-group">
-                                <label>Phone:</label>
-                                <input type="text" value="${phone}" disabled class="form-input">
-                            </div>
 
-                            <div class="form-group">
-                                <label>Name:</label>
-                                <input type="text" id="editUserName" value="${user.name || ''}" placeholder="User name" class="form-input">
-                            </div>
+                        <div class="form-group">
+                            <label>Name:</label>
+                            <input type="text" id="editUserName" value="${user.name || ''}" placeholder="User name" class="form-input">
+                        </div>
 
-                            <div class="form-group">
-                                <label>Main Balance:</label>
-                                <div class="input-button-group">
-                                    <input type="number" id="editUserBalance" value="${user.balance || 0}" placeholder="0" class="form-input">
-                                    <button onclick="addMainBalance('${phone}', 100)" class="btn-add">+100</button>
-                                    <button onclick="addMainBalance('${phone}', 500)" class="btn-add">+500</button>
-                                    <button onclick="addMainBalance('${phone}', 1000)" class="btn-add">+1K</button>
-                                </div>
-                            </div>
+                        ${userGroups.length > 0 ? `
+                        <div class="form-group">
+                            <label>Group:</label>
+                            <select id="editUserGroup" class="form-input" style="cursor: pointer;">
+                                ${userGroups.map(g => `<option value="${g.id}" ${g.id === currentGroupId ? 'selected' : ''}>${g.name}</option>`).join('')}
+                            </select>
+                            <small style="color: var(--text-secondary); margin-top: 5px; display: block;">This user belongs to: ${userGroups.map(g => g.name).join(', ')}</small>
+                        </div>
+                        ` : ''}
 
-                            <div class="form-group">
-                                <label>Due Balance:</label>
-                                <div class="input-button-group">
-                                    <input type="number" id="editUserDue" value="${user.dueBalance || 0}" placeholder="0" class="form-input">
-                                    <button onclick="addDueBalance('${phone}', 100)" class="btn-add">+100</button>
-                                    <button onclick="addDueBalance('${phone}', 500)" class="btn-add">+500</button>
-                                    <button onclick="addDueBalance('${phone}', 1000)" class="btn-add">+1K</button>
-                                </div>
+                        <div class="form-group">
+                            <label>Main Balance:</label>
+                            <div class="input-button-group">
+                                <input type="number" id="editUserBalance" value="${user.balance || 0}" placeholder="0" class="form-input">
+                                <button onclick="addMainBalance('${phone}', 100)" class="btn-add">+100</button>
+                                <button onclick="addMainBalance('${phone}', 500)" class="btn-add">+500</button>
+                                <button onclick="addMainBalance('${phone}', 1000)" class="btn-add">+1K</button>
                             </div>
+                        </div>
 
-                            <div class="form-group button-group">
-                                <button onclick="saveUserChanges('${phone}')" class="btn-save">
-                                    <i class="fas fa-save"></i> Save Changes
-                                </button>
-                                <button onclick="closeModal()" class="btn-cancel">
-                                    <i class="fas fa-times"></i> Cancel
-                                </button>
+                        <div class="form-group">
+                            <label>Due Balance:</label>
+                            <div class="input-button-group">
+                                <input type="number" id="editUserDue" value="${user.dueBalance || 0}" placeholder="0" class="form-input">
+                                <button onclick="addDueBalance('${phone}', 100)" class="btn-add">+100</button>
+                                <button onclick="addDueBalance('${phone}', 500)" class="btn-add">+500</button>
+                                <button onclick="addDueBalance('${phone}', 1000)" class="btn-add">+1K</button>
                             </div>
+                        </div>
+
+                        <div class="form-group button-group">
+                            <button onclick="saveUserChanges('${phone}', '${currentGroupId || ''}')" class="btn-save">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                            <button onclick="closeModal()" class="btn-cancel">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
                         </div>
                     </div>
                 </div>
-            `;
-            document.getElementById('modalContainer').innerHTML = modal;
-        })
-        .catch(err => alert('Error loading user: ' + err.message));
+            </div>
+        `;
+        document.getElementById('modalContainer').innerHTML = modal;
+        window.editingFromGroupId = null; // Clear after use
+    })
+    .catch(err => alert('Error loading user: ' + err.message));
 }
 
 function addMainBalance(phone, amount) {
@@ -3079,7 +3893,7 @@ function addDueBalance(phone, amount) {
     document.getElementById('editUserDue').value = currentValue + amount;
 }
 
-function saveUserChanges(phone) {
+function saveUserChanges(phone, groupId) {
     const name = document.getElementById('editUserName').value.trim();
     const balance = parseInt(document.getElementById('editUserBalance').value) || 0;
     const due = parseInt(document.getElementById('editUserDue').value) || 0;
@@ -3092,7 +3906,7 @@ function saveUserChanges(phone) {
     fetch(`/api/users/${phone}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, balance, dueBalance: due })
+        body: JSON.stringify({ name, balance, dueBalance: due, groupId: groupId || null })
     })
     .then(res => res.json())
     .then(data => {
@@ -4310,7 +5124,8 @@ function toggleThemeFromSettings() {
 
 function changeLanguage(lang) {
     currentLang = lang;
-    showToast('Language changed', 'success');
+    updatePageLanguage();
+    showToast(currentLang === 'bn' ? '🇧🇩 বাংলা' : '🇬🇧 English', 'success');
 }
 
 function showBackupModal() {
@@ -4573,6 +5388,12 @@ function checkBotStatus() {
         });
 }
 
+// Store selected payment methods for each group
+const groupPaymentMethods = new Map();
+
+// Store items per page for each group (default: 10)
+const groupItemsPerPage = new Map();
+
 function showDueReminderModal() {
     // Get groups with due > 0 using totalDue from API
     const groupsWithDue = allGroups.filter(group => {
@@ -4585,42 +5406,53 @@ function showDueReminderModal() {
     }
     
     const modal = `
-        <div class="modal" onclick="closeModal(event)">
-            <div class="modal-content" onclick="event.stopPropagation()">
-                <div class="modal-header">
-                    <h2><i class="fas fa-bell"></i> Send Due Reminders</h2>
-                    <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div class="modal" onclick="closeModal(event)" style="padding: 10px;">
+            <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 95%; width: 100%; max-height: 90vh;">
+                <div class="modal-header" style="padding: 15px 10px;">
+                    <h2 style="font-size: clamp(1rem, 4vw, 1.5rem);"><i class="fas fa-bell"></i> Send Due Reminders</h2>
+                    <button class="modal-close" onclick="closeModal()" style="font-size: 1.5rem; padding: 5px 10px;">&times;</button>
                 </div>
-                <div class="modal-body">
-                    <div style="background: rgba(67, 233, 123, 0.1); border-left: 4px solid #43e97b; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="color: #43e97b; margin: 0 0 10px 0;">📢 Due Reminder Service</h4>
-                        <p style="margin: 0; color: #aaa; font-size: 0.95rem;">
+                <div class="modal-body" style="padding: 15px 10px;">
+                    <div style="background: rgba(67, 233, 123, 0.1); border-left: 4px solid #43e97b; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #43e97b; margin: 0 0 8px 0; font-size: clamp(0.9rem, 3.5vw, 1.1rem);">📢 Due Reminder Service</h4>
+                        <p style="margin: 0; color: #aaa; font-size: clamp(0.8rem, 3vw, 0.95rem); line-height: 1.4;">
                             Send WhatsApp reminders to selected groups about their pending dues. Only groups with outstanding dues will receive messages.
                         </p>
                     </div>
                     
-                    <div style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px;">
+                    <div style="max-height: 50vh; overflow-y: auto; margin-bottom: 15px; background: rgba(255,255,255,0.02); padding: 8px; border-radius: 8px;">
                         ${groupsWithDue.map(group => `
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 10px; border-radius: 8px; border-left: 3px solid #43e97b;">
-                                <input type="checkbox" 
-                                       class="reminder-checkbox" 
-                                       value="${group.id}" 
-                                       ${groupsMarkedForDueReminder.has(group.id) ? 'checked' : ''} 
-                                       style="width: 20px; height: 20px; cursor: pointer;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 600; color: #eee; margin-bottom: 4px;">${group.name}</div>
-                                    <div style="font-size: 0.85rem; color: #aaa;">
-                                        💰 Due: ৳${group.totalDue.toLocaleString()} | Members: ${group.totalUsers}
+                            <div style="padding: 10px; background: rgba(255,255,255,0.05); margin-bottom: 12px; border-radius: 8px; border-left: 3px solid #43e97b;">
+                                <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px;">
+                                    <input type="checkbox" 
+                                           class="reminder-checkbox" 
+                                           value="${group.id}" 
+                                           ${groupsMarkedForDueReminder.has(group.id) ? 'checked' : ''} 
+                                           style="width: 18px; height: 18px; cursor: pointer; margin-top: 2px; flex-shrink: 0;">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-weight: 600; color: #eee; margin-bottom: 4px; font-size: clamp(0.85rem, 3.5vw, 1rem); word-break: break-word;">${group.name}</div>
+                                        <div style="font-size: clamp(0.75rem, 2.8vw, 0.85rem); color: #aaa; display: flex; flex-wrap: wrap; gap: 8px;">
+                                            <span>💰 Due: ৳${group.totalDue.toLocaleString()}</span>
+                                            <span>| Members: ${group.totalUsers}</span>
+                                        </div>
+                                    </div>
+                                    ${groupsMarkedForDueReminder.has(group.id) ? '<i class="fas fa-check-circle" style="color: #43e97b; font-size: clamp(1rem, 4vw, 1.2rem); flex-shrink: 0;"></i>' : ''}
+                                </div>
+                                <div style="margin-left: 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 10px;">
+                                    <div style="font-size: clamp(0.75rem, 3vw, 0.85rem); color: #4facfe; margin-bottom: 8px; font-weight: 600;">
+                                        <i class="fas fa-credit-card"></i> Select Payment Methods:
+                                    </div>
+                                    <div id="payment-methods-${group.id}" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                        <!-- Payment methods will be loaded here -->
                                     </div>
                                 </div>
-                                ${groupsMarkedForDueReminder.has(group.id) ? '<i class="fas fa-check-circle" style="color: #43e97b; font-size: 1.2rem;"></i>' : ''}
                             </div>
                         `).join('')}
                     </div>
                     
-                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #4facfe; margin-bottom: 20px;">
-                        <h4 style="margin: 0 0 10px 0; color: #4facfe;">📝 Message Preview:</h4>
-                        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; font-size: 0.9rem; color: #bbb; font-family: monospace; line-height: 1.6; white-space: pre-wrap;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border-left: 4px solid #4facfe; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 8px 0; color: #4facfe; font-size: clamp(0.9rem, 3.5vw, 1.1rem);">📝 Message Preview:</h4>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-size: clamp(0.7rem, 2.8vw, 0.85rem); color: #bbb; font-family: monospace; line-height: 1.5; white-space: pre-wrap; overflow-x: auto;">
 🔔 *দয়া করে মনোযোগ দিন* 🔔
 
 [Group Name] গ্রুপের জন্য বকেয়া টাকা পরিশোধের অনুরোধ।
@@ -4643,13 +5475,15 @@ function showDueReminderModal() {
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="sendDueReminders()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #43e97b 0%, #38ada9 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.3s ease;"
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <button onclick="sendDueReminders()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #43e97b 0%, #38ada9 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: clamp(0.9rem, 3.5vw, 1rem); transition: all 0.3s ease; touch-action: manipulation;"
+                                ontouchstart="this.style.transform='scale(0.98)'" 
+                                ontouchend="this.style.transform='scale(1)'"
                                 onmouseover="this.style.transform='scale(1.02)'" 
                                 onmouseout="this.style.transform='scale(1)'">
                             <i class="fas fa-send"></i> Send Reminders
                         </button>
-                        <button onclick="closeModal()" style="flex: 1; padding: 14px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                        <button onclick="closeModal()" style="width: 100%; padding: 14px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: clamp(0.9rem, 3.5vw, 1rem); touch-action: manipulation;">
                             Cancel
                         </button>
                     </div>
@@ -4659,6 +5493,9 @@ function showDueReminderModal() {
     `;
     
     document.getElementById('modalContainer').innerHTML = modal;
+    
+    // Load payment methods for all groups
+    loadPaymentMethodsForReminder(groupsWithDue);
     
     // Add event listeners to checkboxes
     document.querySelectorAll('.reminder-checkbox').forEach(checkbox => {
@@ -4670,6 +5507,88 @@ function showDueReminderModal() {
             }
         });
     });
+}
+
+// Load payment methods and create checkboxes for each group
+async function loadPaymentMethodsForReminder(groups) {
+    try {
+        // Request payment numbers with admin_view flag to always get them
+        const response = await fetch('/api/payment-numbers?admin_view=true');
+        const data = await response.json();
+        const paymentNumbers = data.paymentNumbers || [];
+        const isEnabled = data.isEnabled !== false;
+        
+        groups.forEach(group => {
+            const container = document.getElementById(`payment-methods-${group.id}`);
+            if (!container) return;
+            
+            // If no payment methods available, show message
+            if (!paymentNumbers || paymentNumbers.length === 0) {
+                container.innerHTML = '<span style="color: #999; font-size: 0.85rem;">ℹ️ No payment methods configured</span>';
+                return;
+            }
+            
+            // Initialize with all methods selected by default
+            if (!groupPaymentMethods.has(group.id)) {
+                groupPaymentMethods.set(group.id, new Set(paymentNumbers.map((_, idx) => idx)));
+            }
+            
+            const selectedMethods = groupPaymentMethods.get(group.id);
+            
+            // Build warning message if payment system is disabled
+            const warningHTML = !isEnabled ? `
+                <div style="padding: 8px; background: rgba(255, 165, 0, 0.2); border: 1px solid #f59e0b; border-radius: 6px; margin-bottom: 8px; font-size: 0.8rem; color: #fbbf24; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-exclamation-triangle" style="flex-shrink: 0;"></i>
+                    <span>⚠️ Payment system is OFF - methods shown for admin use only</span>
+                </div>
+            ` : '';
+            
+            const methodsHTML = paymentNumbers.map((payment, index) => {
+                const isChecked = selectedMethods.has(index);
+                const label = payment.isBank 
+                    ? `${payment.method} - ${payment.accountNumber}` 
+                    : `${payment.method} - ${payment.number}`;
+                
+                return `
+                    <label style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; background: ${isChecked ? 'rgba(67, 233, 123, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isChecked ? '#43e97b' : 'rgba(255,255,255,0.1)'}; border-radius: 6px; cursor: pointer; font-size: clamp(0.75rem, 2.8vw, 0.85rem); color: ${isChecked ? '#43e97b' : '#aaa'}; transition: all 0.2s; min-height: 36px; touch-action: manipulation;">
+                        <input type="checkbox" 
+                               class="payment-method-checkbox"
+                               data-group-id="${group.id}"
+                               data-payment-index="${index}"
+                               ${isChecked ? 'checked' : ''}
+                               style="cursor: pointer; width: 16px; height: 16px; flex-shrink: 0;"
+                               onchange="togglePaymentMethod('${group.id}', ${index}, this)">
+                        <span style="word-break: break-word; line-height: 1.3;">${label}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            container.innerHTML = warningHTML + methodsHTML;
+        });
+    } catch (error) {
+        console.error('Error loading payment methods:', error);
+    }
+}
+
+// Toggle payment method selection for a group
+function togglePaymentMethod(groupId, paymentIndex, checkbox) {
+    if (!groupPaymentMethods.has(groupId)) {
+        groupPaymentMethods.set(groupId, new Set());
+    }
+    
+    const methods = groupPaymentMethods.get(groupId);
+    
+    if (checkbox.checked) {
+        methods.add(paymentIndex);
+        checkbox.parentElement.style.background = 'rgba(67, 233, 123, 0.2)';
+        checkbox.parentElement.style.borderColor = '#43e97b';
+        checkbox.parentElement.style.color = '#43e97b';
+    } else {
+        methods.delete(paymentIndex);
+        checkbox.parentElement.style.background = 'rgba(255,255,255,0.05)';
+        checkbox.parentElement.style.borderColor = 'rgba(255,255,255,0.1)';
+        checkbox.parentElement.style.color = '#aaa';
+    }
 }
 
 function sendDueReminders() {
@@ -4688,11 +5607,17 @@ function sendDueReminders() {
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     button.disabled = true;
     
+    // Prepare data with selected payment methods for each group
+    const reminderData = Array.from(groupsMarkedForDueReminder).map(groupId => ({
+        groupId: groupId,
+        paymentMethodIndices: Array.from(groupPaymentMethods.get(groupId) || [])
+    }));
+    
     fetch('/api/send-due-reminders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            groupIds: Array.from(groupsMarkedForDueReminder)
+            groups: reminderData
         })
     })
     .then(res => res.json())
@@ -4757,6 +5682,19 @@ function filterModalTable() {
     rows.forEach(row => {
         const text = row.textContent.toLowerCase();
         row.style.display = text.includes(search) ? '' : 'none';
+    });
+}
+
+function filterUserCards() {
+    const search = document.getElementById('userSearch').value.toLowerCase();
+    const cards = document.querySelectorAll('.user-card');
+
+    cards.forEach(card => {
+        const name = card.getAttribute('data-name').toLowerCase();
+        const phone = card.getAttribute('data-phone').toLowerCase();
+        
+        const matches = name.includes(search) || phone.includes(search);
+        card.style.display = matches ? '' : 'none';
     });
 }
 
@@ -5933,25 +6871,57 @@ function toggleGroupSelection(groupId) {
 }
 
 // Select All Groups
-function selectAllGroups() {
-    allGroups.forEach(group => {
-        selectedGroups.add(group.id);
-        const checkbox = document.querySelector(`input[value="${group.id}"]`);
-        if (checkbox) {
-            checkbox.checked = true;
-        }
-    });
-    showToast(`All ${allGroups.length} groups selected!`, 'success');
+// Toggle Select/Deselect All Groups
+function toggleSelectAll() {
+    const btn = document.getElementById('toggleSelectBtn');
+    const icon = btn.querySelector('i');
+    
+    // Check if all groups are currently selected
+    const allSelected = selectedGroups.size === allGroups.length;
+    
+    if (allSelected) {
+        // Deselect all
+        selectedGroups.clear();
+        document.querySelectorAll('input.checkbox-select').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        document.getElementById('calculationResult').style.display = 'none';
+        
+        // Update button to "Select All"
+        btn.classList.remove('btn-deselect');
+        icon.className = 'fas fa-check-square';
+        btn.innerHTML = '<i class="fas fa-check-square"></i> Select All';
+        
+        showToast('All groups deselected!', 'info');
+    } else {
+        // Select all
+        allGroups.forEach(group => {
+            selectedGroups.add(group.id);
+            const checkbox = document.querySelector(`input[value="${group.id}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+        
+        // Update button to "Deselect All"
+        btn.classList.add('btn-deselect');
+        icon.className = 'fas fa-times-square';
+        btn.innerHTML = '<i class="fas fa-times-square"></i> Deselect All';
+        
+        showToast(`All ${allGroups.length} groups selected!`, 'success');
+    }
 }
 
-// Deselect All Groups
+// Legacy functions for compatibility
+function selectAllGroups() {
+    toggleSelectAll();
+}
+
 function deselectAllGroups() {
-    selectedGroups.clear();
-    document.querySelectorAll('input.checkbox-select').forEach(checkbox => {
-        checkbox.checked = false;
-    });
-    document.getElementById('calculationResult').style.display = 'none';
-    showToast('All groups deselected!', 'info');
+    const btn = document.getElementById('toggleSelectBtn');
+    if (btn.classList.contains('btn-deselect')) {
+        toggleSelectAll();
+    }
 }
 
 // Calculate Selected Diamonds

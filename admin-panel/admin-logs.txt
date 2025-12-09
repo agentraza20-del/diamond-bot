@@ -152,3 +152,25 @@
 [2025-12-08T11:44:02.304Z] Updated user: 76210050711676 (Name: RUBEL, Balance: 0, DueBalance: 484)
 [2025-12-08T11:49:12.598Z] Updated user: 76210050711676 (Name: RUBEL, Balance: 0, DueBalance: 984)
 [2025-12-08T11:59:55.850Z] Updated user: 76210050711676 (Name: RUBEL, Balance: 0, DueBalance: 2984)
+[2025-12-08T14:44:09.085Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-08T14:44:23.811Z] 🔐 Admin logged in
+[2025-12-09T11:42:48.449Z] 📢 Due reminder sent to Test bot | Due: ৳400
+[2025-12-09T11:44:24.759Z] 📢 Due reminder sent to Test bot | Due: ৳400
+[2025-12-09T11:46:08.549Z] 📢 Due reminder sent to Test bot | Due: ৳400
+[2025-12-09T11:47:57.309Z] 📢 Due reminder sent to Test bot | Due: ৳400
+[2025-12-09T12:01:50.631Z] 📢 Due reminder sent to Test bot | Due: ৳400
+[2025-12-09T12:42:39.839Z] 🔐 Admin logged in
+[2025-12-09T12:43:32.332Z] 🔐 Admin logged in
+[2025-12-09T12:44:00.398Z] 📢 Due reminder sent to Test bot | Due: ৳400
+[2025-12-09T14:12:49.270Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-09T14:13:04.285Z] 🔐 Admin logged in
+[2025-12-09T16:35:14.144Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-09T16:35:25.546Z] 🔐 Admin logged in
+[2025-12-09T17:49:28.947Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-09T17:49:44.921Z] 🔐 Admin logged in
+[2025-12-09T18:29:41.685Z] 📢 Due reminder sent to Test bot | Due: ৳13000
+[2025-12-09T18:37:43.223Z] 📢 Due reminder sent to Test bot | Due: ৳13000
+[2025-12-09T18:43:21.578Z] 📢 Due reminder sent to Test bot | Due: ৳13000
+[2025-12-09T19:03:24.553Z] 📢 Due reminder sent to Test bot | Due: ৳13000
+[2025-12-09T19:15:39.099Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-09T19:24:07.130Z] 🔐 Admin logged in

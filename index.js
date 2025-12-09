@@ -33,20 +33,25 @@ const { scanPendingOrders, getUserOrderReport, getMissingPendingOrders, generate
 // 📡 Initialize global broadcast functions (will be overridden by admin-panel/server.js)
 require('./utils/broadcast-helper');
 
-// Connect to Admin Panel Socket.IO server with retry logic
-const adminSocket = io('http://localhost:3005', {
+// Connect to Admin Panel Socket.IO server with improved retry logic
+const adminSocket = io('http://127.0.0.1:3005', {
     reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
+    reconnectionDelay: 5000,  // Initial delay increased to 5s
+    reconnectionDelayMax: 15000,  // Max delay increased to 15s
     reconnectionAttempts: Infinity,
-    timeout: 10000,
-    transports: ['websocket', 'polling']
+    timeout: 25000,  // Increased from 20s to 25s
+    transports: ['websocket', 'polling'],
+    forceNew: true,
+    autoConnect: false,  // Don't auto-connect, we'll connect manually after bot is ready
+    rejectUnauthorized: false
 });
 
 let isAdminPanelConnected = false;
+let socketConnectionAttempts = 0;
 
 adminSocket.on('connect', () => {
     isAdminPanelConnected = true;
+    socketConnectionAttempts = 0; // Reset attempts on successful connection
     console.log('✅ [SOCKET.IO] Connected to Admin Panel (Port 3005)');
     console.log(`[SOCKET.IO] Socket ID: ${adminSocket.id}`);
 });
@@ -54,15 +59,35 @@ adminSocket.on('connect', () => {
 adminSocket.on('disconnect', (reason) => {
     isAdminPanelConnected = false;
     console.log(`❌ [SOCKET.IO] Disconnected from Admin Panel: ${reason}`);
+    if (reason === 'io server disconnect') {
+        console.log('[SOCKET.IO] Server disconnected - Will auto-reconnect...');
+    }
 });
 
 adminSocket.on('connect_error', (error) => {
     isAdminPanelConnected = false;
-    // Only log once every 30 seconds to avoid spam
-    if (!global.lastSocketErrorLog || Date.now() - global.lastSocketErrorLog > 30000) {
-        console.log('⚠️ [SOCKET.IO] Cannot connect to Admin Panel (Port 3005) - Bot will work without admin panel features');
+    socketConnectionAttempts++;
+    
+    // Only log every 60 seconds to avoid spam
+    if (!global.lastSocketErrorLog || Date.now() - global.lastSocketErrorLog > 60000) {
+        console.log('\n⚠️  [SOCKET.IO] Cannot connect to Admin Panel (Port 3005)');
+        console.log('⚠️  [SOCKET.IO] Error:', error.message || error.type || 'Unknown error');
+        console.log('⚠️  [SOCKET.IO] Bot will continue working independently');
+        console.log('💡 [SOCKET.IO] Tip: Start admin panel with: node admin-panel/server.js\n');
         global.lastSocketErrorLog = Date.now();
     }
+});
+
+adminSocket.on('error', (error) => {
+    // Suppress detailed error logging - connection errors are already logged above
+    if (!global.lastSocketDetailedErrorLog || Date.now() - global.lastSocketDetailedErrorLog > 120000) {
+        console.log('[SOCKET.IO] 🔄 Attempting to reconnect to Admin Panel...');
+        global.lastSocketDetailedErrorLog = Date.now();
+    }
+});
+
+adminSocket.io.on('error', (error) => {
+    // IO errors are also suppressed - high frequency messages
 });
 
 // Initialize database files
@@ -105,8 +130,8 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: 'new',
-        timeout: 90000,  // Increased to 90s for low-memory systems
-        protocolTimeout: 180000, // Add protocol timeout
+        timeout: 120000,  // Increased to 120s for browser initialization
+        protocolTimeout: 300000, // Increased to 300s for slow systems
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -132,14 +157,19 @@ const client = new Client({
             '--no-first-run',
             '--no-service-autorun',
             '--password-store=basic',
-            '--use-gl=swiftshader',
             '--disable-crash-reporter',
             '--disable-web-resources',
             '--disable-component-update',
             '--disable-component-extensions-with-background-pages',
             '--disable-default-extension-libs',
             '--disable-translate',
-            '--disable-permissions-api'
+            '--disable-permissions-api',
+            '--disable-preconnect',
+            '--disable-client-side-phishing-detection',
+            '--disable-code-cache',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-software-rasterizer'
         ]
     }
 });
@@ -169,6 +199,15 @@ client.on('ready', async () => {
     console.log('✅ WhatsApp Bot Ready!');
     console.log('🤖 Bot is now listening for messages...\n');
     
+    // 🤖 Manual Socket.IO connection after bot is ready
+    console.log('[SOCKET.IO] 🔌 Connecting to Admin Panel...');
+    setTimeout(() => {
+        if (!adminSocket.connected) {
+            adminSocket.connect();
+            console.log('[SOCKET.IO] 🔄 Connection attempt initiated');
+        }
+    }, 2000); // Give admin panel 2 more seconds after bot ready
+    
     // 🤖 Restore any processing orders that were in progress before bot crashed
     console.log('[STARTUP] 🔄 Restoring processing timers...');
     restoreProcessingTimers(client);
@@ -178,7 +217,8 @@ client.on('ready', async () => {
     // Start periodic check for deleted messages (every 15 seconds)
     startDeletedMessageChecker(client);
     
-    // Listen for admin panel messages
+    // Listen for admin panel messages - Remove old listeners first
+    adminSocket.removeAllListeners('sendGroupMessage');
     adminSocket.on('sendGroupMessage', async (data) => {
         const { groupId, message } = data;
         console.log(`[SOCKET] 📨 Received sendGroupMessage event:`, { groupId, messagePreview: message?.substring(0, 50) });
@@ -206,9 +246,14 @@ client.on('error', (error) => {
     
     // Handle execution context destruction - this is a critical error
     if (error.message && error.message.includes('Execution context was destroyed')) {
-        console.log('⚠️ Execution context error detected - attempting recovery...');
-        console.log('💡 This is a Chromium browser process issue on low-memory systems');
-        console.log('✅ Bot will recover on next message or reconnect attempt');
+        console.log('🔴 CRITICAL: Execution context error detected');
+        console.log('⚠️ Browser process crashed or was terminated');
+        console.log('💡 Possible causes:');
+        console.log('   - System ran out of memory');
+        console.log('   - Browser process was killed by OS');
+        console.log('   - Protocol error from WhatsApp Web.js');
+        console.log('✅ Bot will attempt to recover on next initialization');
+        botIsReady = false;
     }
     
     // Handle "Page crashed" error - browser process died
@@ -217,6 +262,13 @@ client.on('error', (error) => {
         console.log('🔄 Attempting to restore connection...');
         botIsReady = false;
         // Bot will auto-reconnect via WhatsApp Web.js
+    }
+    
+    // Handle navigation timeout
+    if (error.message && error.message.includes('Navigation timeout')) {
+        console.error('⏱️ Browser navigation timed out');
+        console.log('💡 Network might be slow or WhatsApp Web is unresponsive');
+        botIsReady = false;
     }
 });
 
@@ -253,6 +305,38 @@ client.on('message', async (msg) => {
         if (isGroup) {
             groupId = msg.from;
             console.log(`[MESSAGE] GroupId: ${groupId}`);
+            
+            // 🤖 Auto-register group in database if not exists (for broadcast messages)
+            try {
+                const currentDb = await fs.readFile(path.join(__dirname, 'config', 'database.json'), 'utf8');
+                const database = JSON.parse(currentDb);
+                
+                if (!database.groups) {
+                    database.groups = {};
+                }
+                
+                // Register group if not exists
+                if (!database.groups[groupId]) {
+                    const chat = await msg.getChat();
+                    const groupName = chat.name || 'Unknown Group';
+                    
+                    database.groups[groupId] = {
+                        name: groupName,
+                        id: groupId,
+                        createdAt: new Date().toISOString(),
+                        messageCount: 1
+                    };
+                    
+                    await fs.writeFile(path.join(__dirname, 'config', 'database.json'), JSON.stringify(database, null, 2));
+                    console.log(`[GROUP-AUTO-REGISTER] ✅ Group registered: ${groupName} (${groupId})`);
+                } else {
+                    // Update message count
+                    database.groups[groupId].messageCount = (database.groups[groupId].messageCount || 0) + 1;
+                    await fs.writeFile(path.join(__dirname, 'config', 'database.json'), JSON.stringify(database, null, 2));
+                }
+            } catch (regErr) {
+                console.error('[GROUP-AUTO-REGISTER] Error registering group:', regErr.message);
+            }
         }
         
         // Check for payment screenshot (image with amount or payment keywords)
@@ -324,6 +408,17 @@ client.on('message', async (msg) => {
                     return; // Don't send any message
                 }
                 
+                // Load payment keywords config to check which methods are enabled
+                const paymentKeywordsPath = path.join(__dirname, 'config', 'payment-keywords.json');
+                let paymentKeywordsConfig = { methods: {} };
+                
+                try {
+                    const keywordsData = await fs.readFile(paymentKeywordsPath, 'utf8');
+                    paymentKeywordsConfig = JSON.parse(keywordsData);
+                } catch (e) {
+                    console.log('[NUMBER-COMMAND] Keywords config not found, showing all numbers');
+                }
+                
                 const paymentNumberPath = path.join(__dirname, 'config', 'payment-number.json');
                 const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
                 const paymentConfig = JSON.parse(paymentNumberData);
@@ -333,11 +428,26 @@ client.on('message', async (msg) => {
                     return;
                 }
                 
+                // Filter only enabled payment methods
+                const enabledPaymentNumbers = paymentConfig.paymentNumbers.filter(payment => {
+                    const methodName = payment.method;
+                    const methodConfig = paymentKeywordsConfig.methods[methodName];
+                    
+                    // If method config doesn't exist or is enabled, include it
+                    if (!methodConfig) return true; // Default to enabled if not in config
+                    return methodConfig.enabled === true;
+                });
+                
+                if (enabledPaymentNumbers.length === 0) {
+                    console.log(`[NUMBER-COMMAND] ❌ No enabled payment methods - silently ignoring`);
+                    return; // Don't send any message if all methods are disabled
+                }
+                
                 let responseText = '💰 *Payment Numbers* 💰\n\n';
                 
                 // Group by method
                 const methodGroups = {};
-                paymentConfig.paymentNumbers.forEach(payment => {
+                enabledPaymentNumbers.forEach(payment => {
                     if (!methodGroups[payment.method]) {
                         methodGroups[payment.method] = [];
                     }
@@ -444,8 +554,107 @@ client.on('message', async (msg) => {
             return;
         }
         
+        // ========================================
+        // 🎯 MULTI-LINE DIAMOND ORDER CHECK (PRIORITY)
+        // ========================================
+        // Check this BEFORE payment keywords to prevent false positives
+        // with numeric player IDs that might look like payment methods
+        
+        // Check system status before processing diamond requests
+        const diamondStatusPath = path.join(__dirname, 'config', 'diamond-status.json');
+        let diamondSystemStatus = null;
+        try {
+            const statusData = await fs.readFile(diamondStatusPath, 'utf8');
+            diamondSystemStatus = JSON.parse(statusData);
+        } catch (err) {
+            console.log('[SYSTEM-STATUS] Could not load diamond status, assuming ON');
+        }
+        
+        // Check for multi-line diamond request (ID + Diamonds) - STRICT VALIDATION
+        if (isGroup && msg.body.includes('\n')) {
+            // Check if system is OFF
+            if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
+                console.log(`[SYSTEM-OFF] Rejected multi-line request - System is OFF`);
+                const offMessage = diamondSystemStatus.globalMessage || 'ডায়মন্ড রিকোয়েস্ট সাময়িকভাবে বন্ধ আছে। পরে আবার চেষ্টা করুন।';
+                await replyWithDelay(msg, `❌ *System Currently OFF*\n\n${offMessage}`);
+                messageCounter.incrementCounter();
+                return;
+            }
+            
+            console.log(`\n[MULTI-LINE] 🟢 DETECTED MULTI-LINE MESSAGE`);
+            console.log(`[MULTI-LINE] From: ${fromUserId}`);
+            console.log(`[MULTI-LINE] Group: ${groupId}`);
+            
+            const lines = msg.body.trim().split('\n');
+            console.log(`[MULTI-LINE] Lines count: ${lines.length}`);
+            lines.forEach((line, i) => console.log(`[MULTI-LINE]   Line ${i+1}: "${line}"`));
+            
+            // 🔴 STRICT VALIDATION: Only accept exactly 2 lines
+            if (lines.length !== 2) {
+                console.log(`[MULTI-LINE] ❌ REJECTED - Must be exactly 2 lines, got ${lines.length} lines`);
+                return; // Silently ignore - wrong number of lines
+            }
+            
+            // 🔴 STRICT VALIDATION: Line 1 must be pure number (no spaces, no text)
+            const line1 = lines[0].trim();
+            const line1Match = line1.match(/^(\d+)$/);
+            if (!line1Match) {
+                console.log(`[MULTI-LINE] ❌ REJECTED - Line 1 invalid: "${line1}" (must be pure number)`);
+                return; // Silently ignore - invalid first line
+            }
+            
+            // 🔴 STRICT VALIDATION: Line 2 must be pure number (no spaces, no text)
+            const line2 = lines[1].trim();
+            const line2Match = line2.match(/^(\d+)$/);
+            if (!line2Match) {
+                console.log(`[MULTI-LINE] ❌ REJECTED - Line 2 invalid: "${line2}" (must be pure number)`);
+                return; // Silently ignore - invalid second line
+            }
+            
+            // ✅ VALID FORMAT: Both lines are pure numbers
+            const playerId = line1Match[1];
+            const diamonds = line2Match[1];
+            
+            console.log(`[MULTI-LINE] ✅ VALID FORMAT - Player ID: ${playerId}, Diamonds: ${diamonds}`);
+            
+            let userName = fromUserId;
+            try {
+                const contact = await client.getContactById(fromUserId);
+                console.log('[MULTI-LINE] Contact info:', { pushname: contact.pushname, name: contact.name, notifyName: msg._data?.notifyName });
+                userName = contact.pushname || contact.name || msg._data?.notifyName || fromUserId;
+            } catch (contactErr) {
+                console.log('[MULTI-LINE] Could not fetch contact, using fallback name');
+                console.log('[MULTI-LINE] Available fields:', { notifyName: msg._data?.notifyName, author: msg.author });
+                userName = msg._data?.notifyName || msg.author || fromUserId;
+            }
+            console.log(`[MULTI-LINE] Processing for user: ${userName}`);
+            console.log(`[MULTI-LINE] Calling handleMultiLineDiamondRequest...\n`);
+            
+            // Fetch group name
+            const groupName = await getGroupName(client, groupId);
+            await handleMultiLineDiamondRequest(msg, fromUserId, userName, groupId, msg.body, groupName);
+            return;
+        }
+        
         // Payment Number Command - Load keywords dynamically from config
         try {
+            // CHECK: If payment system is disabled globally, silently ignore
+            const paymentSettingsPath = path.join(__dirname, 'config', 'payment-settings.json');
+            let paymentSettings = { enabled: true };
+            
+            try {
+                const settingsData = await fs.readFile(paymentSettingsPath, 'utf8');
+                paymentSettings = JSON.parse(settingsData);
+            } catch (e) {
+                console.log('[PAYMENT-KEYWORD] Settings file not found, defaulting to enabled');
+            }
+            
+            // If payment system is disabled globally, don't respond to payment keywords
+            if (!paymentSettings.enabled) {
+                console.log(`[PAYMENT-KEYWORD] ❌ Payment system is DISABLED globally - silently ignoring keyword from ${fromUserId}`);
+                return; // Don't send any message
+            }
+            
             const paymentKeywordsPath = path.join(__dirname, 'config', 'payment-keywords.json');
             const paymentKeywordsData = await fs.readFile(paymentKeywordsPath, 'utf8');
             const paymentKeywordsConfig = JSON.parse(paymentKeywordsData);
@@ -467,12 +676,18 @@ client.on('message', async (msg) => {
             
             if (matchedMethod) {
                 try {
+                    const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
+                    
+                    // Double-check if the method is still enabled before showing numbers
+                    if (!methodConfig.enabled) {
+                        console.log(`[PAYMENT-INFO] ${matchedMethod} is disabled, not showing payment numbers`);
+                        return;
+                    }
+                    
                     // Load payment numbers fresh (no cache)
                     const paymentNumberPath = path.join(__dirname, 'config', 'payment-number.json');
                     const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
                     const paymentConfig = JSON.parse(paymentNumberData);
-                    
-                    const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
                     
                     // Find matching payment numbers for this method
                     const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
@@ -704,118 +919,9 @@ client.on('message', async (msg) => {
             return;
         }
         
-        // Check system status before processing diamond requests
-        const diamondStatusPath = path.join(__dirname, 'config', 'diamond-status.json');
-        let diamondSystemStatus = null;
-        try {
-            const statusData = await fs.readFile(diamondStatusPath, 'utf8');
-            diamondSystemStatus = JSON.parse(statusData);
-        } catch (err) {
-            console.log('[SYSTEM-STATUS] Could not load diamond status, assuming ON');
-        }
+        // ✅ REMOVED: Single-line order system (just a number like "100")
+        // Users must now use multi-line format: ID on one line, diamonds on next line
         
-        // Check for multi-line diamond request (ID + Diamonds)
-        if (isGroup && msg.body.includes('\n')) {
-            // Check if system is OFF
-            if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
-                const offMessage = diamondSystemStatus.globalMessage || '❌ ডায়মন্ড সিস্টেম বর্তমানে বন্ধ আছে।';
-                await replyWithDelay(msg, offMessage);
-                messageCounter.incrementCounter();
-                console.log(`[SYSTEM-OFF] Rejected multi-line request - System is OFF`);
-                return;
-            }
-            
-            console.log(`\n[MULTI-LINE] 🟢 DETECTED MULTI-LINE MESSAGE`);
-            console.log(`[MULTI-LINE] From: ${fromUserId}`);
-            console.log(`[MULTI-LINE] Group: ${groupId}`);
-            console.log(`[MULTI-LINE] Body length: ${msg.body.length} chars`);
-            
-            const lines = msg.body.trim().split('\n');
-            console.log(`[MULTI-LINE] Lines count: ${lines.length}`);
-            lines.forEach((line, i) => console.log(`[MULTI-LINE]   Line ${i+1}: "${line}"`));
-            
-            if (lines.length >= 2) {
-                let userName = fromUserId;
-                try {
-                    const contact = await client.getContactById(fromUserId);
-                    console.log('[MULTI-LINE] Contact info:', { pushname: contact.pushname, name: contact.name, notifyName: msg._data?.notifyName });
-                    userName = contact.pushname || contact.name || msg._data?.notifyName || fromUserId;
-                } catch (contactErr) {
-                    console.log('[MULTI-LINE] Could not fetch contact, using fallback name');
-                    console.log('[MULTI-LINE] Available fields:', { notifyName: msg._data?.notifyName, author: msg.author });
-                    userName = msg._data?.notifyName || msg.author || fromUserId;
-                }
-                console.log(`[MULTI-LINE] Processing for user: ${userName}`);
-                console.log(`[MULTI-LINE] Calling handleMultiLineDiamondRequest...\n`);
-                
-                // Fetch group name
-                const groupName = await getGroupName(client, groupId);
-                await handleMultiLineDiamondRequest(msg, fromUserId, userName, groupId, msg.body, groupName);
-                return;
-            }
-        }
-        
-        // Diamond order submission: just a number (e.g., 100)
-        const diamondMatch = msg.body.trim().match(/^(\d+)$/);
-        if (diamondMatch) {
-            // Check if system is OFF
-            if (diamondSystemStatus && diamondSystemStatus.systemStatus === 'off') {
-                const offMessage = diamondSystemStatus.globalMessage || '❌ ডায়মন্ড সিস্টেম বর্তমানে বন্ধ আছে।';
-                await replyWithDelay(msg, offMessage);
-                messageCounter.incrementCounter();
-                console.log(`[SYSTEM-OFF] Rejected diamond request - System is OFF`);
-                return;
-            }
-            
-            const amount = parseInt(diamondMatch[1]);
-            let userName = fromUserId;
-            try {
-                const contact = await client.getContactById(fromUserId);
-                // Priority: pushname > name > notifyName > user ID with fallback
-                userName = contact.pushname || contact.name || msg._data?.notifyName || fromUserId;
-                
-                // Clean up: if it's still just a phone number format, mark it as unknown with partial ID
-                if (!userName || userName.includes('@') || /^\d+$/.test(userName)) {
-                    const phoneMatch = fromUserId.match(/(\d+)[@_]/);
-                    if (phoneMatch && (contact.pushname || contact.name)) {
-                        // We have a proper name, use it
-                        userName = contact.pushname || contact.name;
-                    } else {
-                        // Use last 6 digits of phone for better UX
-                        const lastSixDigits = phoneMatch ? phoneMatch[1].slice(-6) : fromUserId.substring(0, 8);
-                        userName = msg._data?.notifyName || `User_${lastSixDigits}`;
-                    }
-                }
-                
-                console.log('[DIAMOND] Contact info:', { 
-                    pushname: contact.pushname, 
-                    name: contact.name, 
-                    notifyName: msg._data?.notifyName,
-                    resolvedName: userName
-                });
-            } catch (contactErr) {
-                console.log('[DIAMOND] Could not fetch contact, using fallback name');
-                console.log('[DIAMOND] Available fields:', { notifyName: msg._data?.notifyName, author: msg.author });
-                // Try multiple fallbacks
-                userName = msg._data?.notifyName || msg.author;
-                if (!userName || /^\d+$/.test(userName)) {
-                    const phoneMatch = fromUserId.match(/(\d+)[@_]/);
-                    userName = phoneMatch ? `User_${phoneMatch[1].slice(-6)}` : 'Unknown User';
-                }
-            }
-            
-            // Check if it's a group (diamond order) or direct message (deposit)
-            if (isGroup) {
-                // In group: treat as diamond order
-                const groupName = await getGroupName(client, groupId);
-                await handleDiamondRequest(msg, fromUserId, userName, groupId, amount, groupName);
-            } else {
-                // Direct message: treat as deposit request
-                await handleDepositRequest(msg, fromUserId, userName, amount);
-            }
-            return;
-        }
-
         
         // Admin "start" command - Set timestamp for missing order detection
         if (msg.body.toLowerCase().trim() === 'start' && isGroup && isAdminUser) {
@@ -1590,12 +1696,13 @@ client.on('message', async (msg) => {
             const helpText = `*🤖 DIAMOND BOT COMMANDS*\n\n` +
                 `/d - Show your dashboard\n` +
                 `/balance - Check your balance\n` +
-                `/balance - Check your balance\n` +
                 `/pending - Show pending diamond requests\n` +
                 `/help - Show this help message\n\n` +
                 `*USER ACTIONS:*\n` +
-                `Send any number in DM (e.g., 500) to request deposit\n` +
-                `Send any number in group (e.g., 100) to order diamonds\n\n` +
+                `Send ID and diamonds on separate lines to order:\n` +
+                `Example:\n` +
+                `1234567\n` +
+                `100\n\n` +
                 `*ADMIN ACTIONS:*\n` +
                 `Reply with "done" or "ok" to approve an order\n` +
                 `Reply with "amount//rcv" (e.g., 500//rcv) to approve deposit or process payment\n` +
@@ -2141,9 +2248,15 @@ app.post('/api/bot-send-message', async (req, res) => {
             return res.status(503).json({ error: 'Bot is not ready yet' });
         }
         
-        console.log(`📨 [BOT-SEND] Blocked - Group messaging is disabled`);
-        
-        res.json({ success: false, error: 'Group messaging is disabled' });
+        // Send message to group
+        try {
+            await sendMessageWithDelay(client, groupId, message);
+            console.log(`✅ [BOT-SEND] Message sent successfully to ${groupId}`);
+            res.json({ success: true, message: 'Message sent' });
+        } catch (sendError) {
+            console.error(`❌ [BOT-SEND] Failed to send message:`, sendError.message);
+            res.status(500).json({ success: false, error: 'Failed to send message', details: sendError.message });
+        }
         
     } catch (error) {
         console.error(`❌ [BOT-SEND] Error sending message:`, error.message);
@@ -2305,24 +2418,50 @@ process.on('SIGINT', () => {
 console.log('🚀 WhatsApp Bot Starting...');
 console.log('⏳ Waiting for QR code...\n');
 
-// ⚡ Initialize client with retry logic
+// ⚡ Initialize client with improved retry logic
 let initAttempts = 0;
-const maxInitAttempts = 3;
+const maxInitAttempts = 5;
+let initDelayMs = 3000; // Start with 3 second delay
 
 async function initializeClient() {
     try {
         initAttempts++;
         console.log(`\n🔄 Initializing WhatsApp client (Attempt ${initAttempts}/${maxInitAttempts})...`);
-        await client.initialize();
+        
+        // Add timeout wrapper to prevent hanging
+        const initTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Initialization timeout - browser took too long')), 90000)
+        );
+        
+        const initPromise = client.initialize();
+        await Promise.race([initPromise, initTimeout]);
+        
         console.log('✅ WhatsApp client initialized successfully');
+        initAttempts = 0; // Reset on success
     } catch (error) {
         console.error(`❌ Failed to initialize WhatsApp client: ${error.message}`);
         
+        // Specific error handling
+        if (error.message && error.message.includes('Execution context was destroyed')) {
+            console.error('🔴 CRITICAL: Browser execution context destroyed');
+            console.log('💡 This usually means the browser process crashed or ran out of memory');
+            console.log('⏳ Waiting longer before retry...');
+            initDelayMs = Math.min(initDelayMs * 1.5, 30000); // Exponential backoff, max 30s
+        } else if (error.message && error.message.includes('timeout')) {
+            console.error('⏱️ Browser initialization timed out');
+            console.log('💡 System might be overloaded or browser is hanging');
+            initDelayMs = Math.min(initDelayMs * 1.5, 30000);
+        }
+        
         if (initAttempts < maxInitAttempts) {
-            console.log(`⏳ Retrying in 5 seconds...`);
-            setTimeout(initializeClient, 5000);
+            console.log(`⏳ Retrying in ${initDelayMs/1000}s...`);
+            setTimeout(initializeClient, initDelayMs);
         } else {
-            console.error('❌ Max initialization attempts reached. Please check your setup.');
+            console.error(`❌ Max initialization attempts (${maxInitAttempts}) reached.`);
+            console.error('Please check:');
+            console.error('  1. Browser is installed (Chrome/Chromium)');
+            console.error('  2. System has enough RAM (min 512MB free)');
+            console.error('  3. .wwebjs_auth folder permissions are correct');
             process.exit(1);
         }
     }

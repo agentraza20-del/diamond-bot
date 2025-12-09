@@ -3312,10 +3312,10 @@ app.get('/api/group-details/:period', async (req, res) => {
         const groupStats = Object.entries(groups).map(([groupId, groupData]) => {
             const entries = groupData.entries || [];
             
-            // Filter entries by date range and approved status
+            // Filter entries by date range and completed/processing status
             const filteredEntries = entries.filter(e => {
-                // Must be approved
-                if (e.status !== 'approved') return false;
+                // Include approved, processing, or completed statuses (exclude pending/rejected)
+                if (!['approved', 'processing', 'completed'].includes(e.status)) return false;
                 
                 // Check if entry has a valid timestamp
                 if (!e.createdAt) return false;

@@ -2556,8 +2556,14 @@ function startProcessingCountdown() {
                 const seconds = totalSeconds % 60;
                 const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 
-                // Always update text (ignore previous optimization since HTML is recreated every 1s anyway)
-                element.textContent = `⏳ ${timeDisplay}`;
+                // 🔧 ONLY update the inner text, preserve element reference
+                // This prevents DOM flickering when silentRefreshOrders runs
+                const firstChild = element.firstChild;
+                if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+                    firstChild.textContent = `⏳ ${timeDisplay}`;
+                } else {
+                    element.textContent = `⏳ ${timeDisplay}`;
+                }
                 
                 element.classList.remove('status-expired');
                 
@@ -2576,7 +2582,14 @@ function startProcessingCountdown() {
                 }
             } else {
                 // Time expired - show as approved
-                element.textContent = '✅ APPROVED';
+                // 🔧 Only update text, not the whole element
+                const firstChild = element.firstChild;
+                if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+                    firstChild.textContent = '✅ APPROVED';
+                } else {
+                    element.textContent = '✅ APPROVED';
+                }
+                
                 element.classList.add('status-expired');
                 element.style.background = 'linear-gradient(135deg, #43e97b 0%, #38ad65 100%)';
                 element.style.borderColor = '#66bb6a';
@@ -2588,7 +2601,7 @@ function startProcessingCountdown() {
                 }, 1000);
             }
         });
-    }, 100); // Update every 100ms for smooth real-time countdown
+    }, 1000); // Update every 1 second (synchronized with silentRefreshOrders)
 }
 
 // Initialize countdown when page loads

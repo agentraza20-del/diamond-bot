@@ -595,11 +595,12 @@ client.on('message', async (msg) => {
                 return; // Silently ignore - wrong number of lines
             }
             
-            // 🔴 STRICT VALIDATION: Line 1 must be pure number (no spaces, no text)
+            // 🔴 FLEXIBLE VALIDATION: Line 1 can be pure number OR phone number format (+96871818340)
             const line1 = lines[0].trim();
-            const line1Match = line1.match(/^(\d+)$/);
+            // Accept: "562656528" OR "+96871818340" (with + prefix and digits)
+            const line1Match = line1.match(/^\+?(\d+)$/);
             if (!line1Match) {
-                console.log(`[MULTI-LINE] ❌ REJECTED - Line 1 invalid: "${line1}" (must be pure number)`);
+                console.log(`[MULTI-LINE] ❌ REJECTED - Line 1 invalid: "${line1}" (must be number or +number)`);
                 return; // Silently ignore - invalid first line
             }
             
@@ -611,7 +612,7 @@ client.on('message', async (msg) => {
                 return; // Silently ignore - invalid second line
             }
             
-            // ✅ VALID FORMAT: Both lines are pure numbers
+            // ✅ VALID FORMAT: Both lines are valid (with or without + prefix)
             const playerId = line1Match[1];
             const diamonds = line2Match[1];
             

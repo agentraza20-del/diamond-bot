@@ -3237,17 +3237,28 @@ function displayOrdersByStatus(status) {
         const date = new Date(o.date);
         const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
 
-        let statusBadgeClass = `status-${o.status}`;
-        let statusIcon = '';
+        let statusDisplay = '';
         
-        if (o.status === 'pending') {
-            statusIcon = '⏳';
-        } else if (o.status === 'processing') {
-            statusIcon = '⚙️';
-        } else if (o.status === 'approved') {
-            statusIcon = '✅';
-        } else if (o.status === 'deleted') {
-            statusIcon = '🗑️';
+        // For processing orders, show only countdown timer (no "PROCESSING" text)
+        if (o.status === 'processing') {
+            const approvalTime = o.processingStartedAt ? new Date(o.processingStartedAt) : new Date(o.date);
+            statusDisplay = `<span class="status-badge status-${o.status}" 
+                                data-order-id="${o.id}" 
+                                data-start-time="${approvalTime.getTime()}"
+                                title="⏳ Processing - Auto-approves in 2 minutes. Delete message to cancel.">⏳ 2:00</span>`;
+        } else {
+            // For other statuses, show icon + text
+            let statusIcon = '';
+            
+            if (o.status === 'pending') {
+                statusIcon = '⏳';
+            } else if (o.status === 'approved') {
+                statusIcon = '✅';
+            } else if (o.status === 'deleted') {
+                statusIcon = '🗑️';
+            }
+            
+            statusDisplay = `<span class="status-badge status-${o.status}">${statusIcon} ${o.status.toUpperCase()}</span>`;
         }
 
         return `
@@ -3257,7 +3268,7 @@ function displayOrdersByStatus(status) {
                 <td data-label="ID/Number">${o.playerId}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
-                <td data-label="Status"><span class="status-badge ${statusBadgeClass}">${statusIcon} ${o.status.toUpperCase()}</span></td>
+                <td data-label="Status">${statusDisplay}</td>
                 <td data-label="Date">${formattedDate}</td>
                 <td data-label="Actions">
                     <div class="order-actions">

@@ -585,18 +585,22 @@ client.on('message', async (msg) => {
             console.log(`[MULTI-LINE] From: ${fromUserId}`);
             console.log(`[MULTI-LINE] Group: ${groupId}`);
             
-            const lines = msg.body.trim().split('\n');
-            console.log(`[MULTI-LINE] Lines count: ${lines.length}`);
+            const allLines = msg.body.trim().split('\n');
+            console.log(`[MULTI-LINE] Total lines (including empty): ${allLines.length}`);
+            
+            // 🔥 FILTER OUT EMPTY LINES - Only keep lines with content
+            const lines = allLines.map(l => l.trim()).filter(l => l.length > 0);
+            console.log(`[MULTI-LINE] Non-empty lines count: ${lines.length}`);
             lines.forEach((line, i) => console.log(`[MULTI-LINE]   Line ${i+1}: "${line}"`));
             
-            // 🔴 STRICT VALIDATION: Only accept exactly 2 lines
+            // 🔴 STRICT VALIDATION: Must have exactly 2 non-empty lines
             if (lines.length !== 2) {
-                console.log(`[MULTI-LINE] ❌ REJECTED - Must be exactly 2 lines, got ${lines.length} lines`);
-                return; // Silently ignore - wrong number of lines
+                console.log(`[MULTI-LINE] ❌ REJECTED - Must have exactly 2 non-empty lines, got ${lines.length}`);
+                return; // Silently ignore - wrong number of non-empty lines
             }
             
             // 🔴 FLEXIBLE VALIDATION: Line 1 can be pure number OR phone number format (+96871818340)
-            const line1 = lines[0].trim();
+            const line1 = lines[0];
             // Accept: "562656528" OR "+96871818340" (with + prefix and digits)
             const line1Match = line1.match(/^\+?(\d+)$/);
             if (!line1Match) {
@@ -605,14 +609,14 @@ client.on('message', async (msg) => {
             }
             
             // 🔴 STRICT VALIDATION: Line 2 must be pure number (no spaces, no text)
-            const line2 = lines[1].trim();
+            const line2 = lines[1];
             const line2Match = line2.match(/^(\d+)$/);
             if (!line2Match) {
                 console.log(`[MULTI-LINE] ❌ REJECTED - Line 2 invalid: "${line2}" (must be pure number)`);
                 return; // Silently ignore - invalid second line
             }
             
-            // ✅ VALID FORMAT: Both lines are valid (with or without + prefix)
+            // ✅ VALID FORMAT: Both lines are valid (with or without + prefix), empty lines ignored
             const playerId = line1Match[1];
             const diamonds = line2Match[1];
             

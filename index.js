@@ -649,98 +649,98 @@ client.on('message', async (msg) => {
                 console.log('[PAYMENT-KEYWORD] Settings file not found, defaulting to enabled');
             }
             
-            // If payment system is disabled globally, don't respond to payment keywords
-            if (!paymentSettings.enabled) {
-                console.log(`[PAYMENT-KEYWORD] ❌ Payment system is DISABLED globally - silently ignoring keyword from ${fromUserId}`);
-                return; // Don't send any message
-            }
-            
-            const paymentKeywordsPath = path.join(__dirname, 'config', 'payment-keywords.json');
-            const paymentKeywordsData = await fs.readFile(paymentKeywordsPath, 'utf8');
-            const paymentKeywordsConfig = JSON.parse(paymentKeywordsData);
-            
-            // Check which payment method matches
-            let matchedMethod = null;
-            let matchedKeyword = null;
-            
-            for (const [methodName, methodConfig] of Object.entries(paymentKeywordsConfig.methods)) {
-                if (!methodConfig.enabled) continue; // Skip disabled methods
+            // ⚠️ ONLY check payment keywords if payment system is enabled
+            if (paymentSettings.enabled) {
+                const paymentKeywordsPath = path.join(__dirname, 'config', 'payment-keywords.json');
+                const paymentKeywordsData = await fs.readFile(paymentKeywordsPath, 'utf8');
+                const paymentKeywordsConfig = JSON.parse(paymentKeywordsData);
                 
-                const keyword = methodConfig.keywords.find(kw => messageBody.includes(kw.toLowerCase()));
-                if (keyword) {
-                    matchedMethod = methodName;
-                    matchedKeyword = keyword;
-                    break;
-                }
-            }
-            
-            if (matchedMethod) {
-                try {
-                    const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
+                // Check which payment method matches
+                let matchedMethod = null;
+                let matchedKeyword = null;
+                
+                for (const [methodName, methodConfig] of Object.entries(paymentKeywordsConfig.methods)) {
+                    if (!methodConfig.enabled) continue; // Skip disabled methods
                     
-                    // Double-check if the method is still enabled before showing numbers
-                    if (!methodConfig.enabled) {
-                        console.log(`[PAYMENT-INFO] ${matchedMethod} is disabled, not showing payment numbers`);
-                        return;
+                    const keyword = methodConfig.keywords.find(kw => messageBody.includes(kw.toLowerCase()));
+                    if (keyword) {
+                        matchedMethod = methodName;
+                        matchedKeyword = keyword;
+                        break;
                     }
-                    
-                    // Load payment numbers fresh (no cache)
-                    const paymentNumberPath = path.join(__dirname, 'config', 'payment-number.json');
-                    const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
-                    const paymentConfig = JSON.parse(paymentNumberData);
-                    
-                    // Find matching payment numbers for this method
-                    const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
-                        p.method.toLowerCase() === matchedMethod.toLowerCase()
-                    );
-                    
-                    if (matchedNumbers.length === 0) {
-                        await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
+                }
+                
+                if (matchedMethod) {
+                    try {
+                        const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
+                        
+                        // Double-check if the method is still enabled before showing numbers
+                        if (!methodConfig.enabled) {
+                            console.log(`[PAYMENT-INFO] ${matchedMethod} is disabled, not showing payment numbers`);
+                            return;
+                        }
+                        
+                        // Load payment numbers fresh (no cache)
+                        const paymentNumberPath = path.join(__dirname, 'config', 'payment-number.json');
+                        const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
+                        const paymentConfig = JSON.parse(paymentNumberData);
+                        
+                        // Find matching payment numbers for this method
+                        const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
+                            p.method.toLowerCase() === matchedMethod.toLowerCase()
+                        );
+                        
+                        if (matchedNumbers.length === 0) {
+                            await replyWithDelay(msg, `❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
+                            messageCounter.incrementCounter();
+                            return;
+                        }
+                        
+                        let numbersText = '';
+                        
+                        // Format each matched payment number
+                        matchedNumbers.forEach((payment, index) => {
+                            if (payment.isBank) {
+                                numbersText += `🏦 *${payment.method}*\n`;
+                                numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
+                                numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
+                                numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
+                                numbersText += `📋 ধরন: ${payment.type}\n`;
+                                if (index < matchedNumbers.length - 1) numbersText += '\n';
+                            } else {
+                                numbersText += `📱 *${payment.method}* (${payment.type})\n`;
+                                numbersText += `📞 ${payment.number}\n`;
+                                if (index < matchedNumbers.length - 1) numbersText += '\n';
+                            }
+                        });
+                        
+                        // Use custom response template from payment-keywords config
+                        let responseMessage = methodConfig.response || '';
+                        
+                        // Replace placeholder if exists
+                        responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
+                        
+                        // If response doesn't have placeholder, append numbers at end
+                        if (!methodConfig.response.includes('{paymentNumbers}')) {
+                            responseMessage = responseMessage + '\n\n' + numbersText;
+                        }
+                        
+                        // Add footer with instructions
+                        responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
+                        
+                        await replyWithDelay(msg, responseMessage);
+                        messageCounter.incrementCounter();
+                        console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
+                        return;
+                    } catch (error) {
+                        console.error('[PAYMENT-INFO ERROR]', error);
+                        await replyWithDelay(msg, '❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
                         messageCounter.incrementCounter();
                         return;
                     }
-                    
-                    let numbersText = '';
-                    
-                    // Format each matched payment number
-                    matchedNumbers.forEach((payment, index) => {
-                        if (payment.isBank) {
-                            numbersText += `🏦 *${payment.method}*\n`;
-                            numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
-                            numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
-                            numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
-                            numbersText += `📋 ধরন: ${payment.type}\n`;
-                            if (index < matchedNumbers.length - 1) numbersText += '\n';
-                        } else {
-                            numbersText += `📱 *${payment.method}* (${payment.type})\n`;
-                            numbersText += `📞 ${payment.number}\n`;
-                            if (index < matchedNumbers.length - 1) numbersText += '\n';
-                        }
-                    });
-                    
-                    // Use custom response template from payment-keywords config
-                    let responseMessage = methodConfig.response || '';
-                    
-                    // Replace placeholder if exists
-                    responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
-                    
-                    // If response doesn't have placeholder, append numbers at end
-                    if (!methodConfig.response.includes('{paymentNumbers}')) {
-                        responseMessage = responseMessage + '\n\n' + numbersText;
-                    }
-                    
-                    // Add footer with instructions
-                    responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
-                    
-                    await replyWithDelay(msg, responseMessage);
-                    messageCounter.incrementCounter();
-                    console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
-                } catch (error) {
-                    console.error('[PAYMENT-INFO ERROR]', error);
-                    await replyWithDelay(msg, '❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
-                    messageCounter.incrementCounter();
                 }
-                return;
+            } else {
+                console.log(`[PAYMENT-KEYWORD] ❌ Payment system is DISABLED globally - skipping payment keyword check`);
             }
         } catch (keywordError) {
             console.error('[PAYMENT-KEYWORDS LOAD ERROR]', keywordError);
@@ -935,6 +935,9 @@ client.on('message', async (msg) => {
         // Admin approval: done, ok, do, dn, yes, অক, okey, ওকে (for diamond orders)
         const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
         if (approvalKeywords.includes(msg.body.toLowerCase().trim()) && isGroup) {
+            
+            console.log(`[APPROVAL] ✅ Approval keyword detected: "${msg.body.trim()}"`);
+            console.log(`[APPROVAL] Has quoted message: ${msg.hasQuotedMsg}`);
             
             // ❌ SECURITY: Block removed admins FIRST before auto-registering
             const REMOVED_ADMINS = ['8801721016186'];

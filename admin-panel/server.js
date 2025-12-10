@@ -4,6 +4,7 @@ const socketIo = require('socket.io');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const { startAutoApprovalTimer } = require('../utils/auto-approval');
 
 const app = express();
 const server = http.createServer(app);
@@ -1382,6 +1383,10 @@ app.post('/api/orders/:orderId/update-status', async (req, res) => {
                 if (status === 'processing') {
                     entry.processingStartedAt = new Date().toISOString();
                     entry.processingTimeout = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes from now
+                    
+                    // 🔥 START AUTO-APPROVAL TIMER
+                    console.log(`[ORDER UPDATE] 🤖 Starting 2-minute auto-approval timer for Order ${orderId}`);
+                    startAutoApprovalTimer(groupId, orderId, entry, null);
                 }
                 
                 // Update the database
@@ -1394,6 +1399,8 @@ app.post('/api/orders/:orderId/update-status', async (req, res) => {
                     groupId: groupId,
                     oldStatus: oldStatus,
                     newStatus: status,
+                    processingStartedAt: entry.processingStartedAt || null,
+                    processingTimeout: entry.processingTimeout || null,
                     timestamp: new Date().toISOString()
                 });
 

@@ -3657,7 +3657,6 @@ async function showGroupOrders(groupId, groupName) {
         showNotification('❌ Error loading orders', 'error');
     }
 }
-}
 
 // Load all orders from all groups
 async function loadAllGroupOrders() {

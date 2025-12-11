@@ -3627,19 +3627,10 @@ async function showGroupOrders(groupId, groupName) {
         // Sort by date (newest first)
         groupOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // Store globally and clear any filters
+        // Store globally
         window.allGroupOrders = groupOrders;
-        window.filteredAllOrders = null; // Clear any existing filters
         window.currentGroupId = groupId;
         window.currentGroupName = groupName;
-        window.itemsPerPage = 10; // Reset to default
-        window.currentAllOrdersPage = 1; // Reset to first page
-
-        // Clear search input if exists
-        const searchInput = document.getElementById('allOrdersSearch');
-        if (searchInput) {
-            searchInput.value = '';
-        }
 
         if (groupOrders.length === 0) {
             const tbody = document.getElementById('allOrdersTableBody');

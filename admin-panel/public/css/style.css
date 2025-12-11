@@ -940,29 +940,6 @@ body[data-theme="light"] {
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 20px;
     margin-top: 20px;
-    max-height: calc(100vh - 420px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 10px;
-}
-
-/* Scrollbar styling for groups grid */
-.groups-grid::-webkit-scrollbar {
-    width: 8px;
-}
-
-.groups-grid::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-}
-
-.groups-grid::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
-}
-
-.groups-grid::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
 }
 
 .group-card,
@@ -3376,11 +3353,6 @@ body[data-theme="light"] {
 
     .navbar-actions {
         gap: 8px;
-    }
-
-    .groups-grid {
-        max-height: calc(100vh - 500px);
-        grid-template-columns: 1fr;
     }
 
     .icon-btn {

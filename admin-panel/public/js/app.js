@@ -3676,6 +3676,12 @@ async function loadAllGroupOrders() {
         const tbody = document.getElementById('allOrdersTableBody');
         if (!tbody) return;
 
+        // 🔒 IMPORTANT: If we're in a group-specific view, DON'T override it!
+        if (window.currentGroupId) {
+            console.log(`🔒 In group-specific view (${window.currentGroupName}), ignoring loadAllGroupOrders() call`);
+            return; // Don't load all orders if we're viewing a specific group
+        }
+
         // Clear group-specific filter
         window.currentGroupId = null;
         window.filteredAllOrders = null;

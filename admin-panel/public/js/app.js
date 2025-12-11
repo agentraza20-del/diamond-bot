@@ -3603,16 +3603,12 @@ async function showGroupOrders(groupId, groupName) {
         window.currentGroupId = groupId;
         window.currentGroupName = groupName;
         
-        console.log(`📍 showGroupOrders called with groupId=${groupId}, groupName=${groupName}`);
+        console.log(`📍 showGroupOrders STARTED with groupId=${groupId}, groupName=${groupName}`);
         
-        const response = await fetch('/api/groups');
-        const groups = await response.json();
+        // Get the group from already-loaded allGroups array
+        const group = allGroups.find(g => g.id === groupId);
         
-        console.log(`📡 API returned ${groups.length} groups`);
-
-        // Find the group
-        const group = groups.find(g => g.id === groupId);
-        console.log(`🔍 Looking for group with id: ${groupId}`);
+        console.log(`🔍 Searching in allGroups (${allGroups.length} groups) for id: ${groupId}`);
         console.log(`✓ Found group: ${group ? group.name : 'NOT FOUND'}`);
         
         if (!group || !group.entries) {
@@ -3621,7 +3617,7 @@ async function showGroupOrders(groupId, groupName) {
             return;
         }
 
-        console.log(`📦 Group has ${group.entries.length} entries`);
+        console.log(`📦 Group "${group.name}" has ${group.entries.length} entries`);
 
         // Update view header with group name
         const viewHeader = document.querySelector('#allOrdersView .view-header h1');
@@ -3629,42 +3625,45 @@ async function showGroupOrders(groupId, groupName) {
             viewHeader.innerHTML = `<i class="fas fa-list"></i> Orders from ${groupName}`;
         }
 
-        // Store ONLY this group's orders
+        // Store ONLY this group's orders - brand new array
         let groupOrders = [];
         for (const order of group.entries) {
-            groupOrders.push({
+            const orderWithGroup = {
                 ...order,
                 groupId: group.id,
                 groupName: group.name
-            });
+            };
+            groupOrders.push(orderWithGroup);
+            console.log(`  Added order #${order.id} to groupOrders`);
         }
 
         // Sort by date (newest first)
         groupOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        console.log(`📊 Created array with ${groupOrders.length} orders for this group ONLY`);
-        console.log(`💾 window.allGroupOrders will contain ONLY ${groupOrders.length} orders`);
+        console.log(`✅ FINAL: Created groupOrders array with ${groupOrders.length} orders ONLY`);
 
-        // Store globally - ONLY THIS GROUP'S ORDERS
+        // Store globally - THIS WILL BE THE ONLY SOURCE OF TRUTH
         window.allGroupOrders = groupOrders;
+        window.currentGroupId = groupId;
+        window.currentGroupName = groupName;
         
-        console.log(`✅ window.allGroupOrders.length = ${window.allGroupOrders.length}`);
-        console.log(`✅ window.currentGroupId = ${window.currentGroupId}`);
-        console.log(`✅ window.currentGroupName = ${window.currentGroupName}`);
+        console.log(`💾 STORED: window.allGroupOrders.length = ${window.allGroupOrders.length}`);
+        console.log(`💾 STORED: window.currentGroupId = "${window.currentGroupId}"`);
+        console.log(`💾 STORED: window.currentGroupName = "${window.currentGroupName}"`);
 
         if (groupOrders.length === 0) {
             const tbody = document.getElementById('allOrdersTableBody');
             tbody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);"><i class="fas fa-inbox"></i> No orders found in this group</td></tr>`;
             document.getElementById('allOrdersPagination').innerHTML = '';
         } else {
-            // Display first page
+            // Display first page - this will use window.allGroupOrders which has only this group's orders
             displayAllOrdersPage(1);
             updateAllOrdersPagination(groupOrders);
         }
 
         // Switch to view
         showView('allOrdersView');
-        console.log(`🎉 SUCCESS: Loaded ${groupOrders.length} orders from group: ${groupName}`);
+        console.log(`🎉 SUCCESS: Displayed ${groupOrders.length} orders from group: ${groupName}`);
     } catch (error) {
         console.error('❌ Error loading group orders:', error);
         showNotification('❌ Error loading orders', 'error');

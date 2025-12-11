@@ -379,18 +379,18 @@
                     </div>
             </div>
 
-            <!-- Bulk Clear Action -->
+            <!-- Search and Filter -->
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="groupSearch" placeholder="Search groups..." onkeyup="filterGroups()">
+            </div>
+
+            <!-- Bulk Actions -->
             <div class="bulk-actions" style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
                 <button class="btn-bulk-action btn-danger" onclick="bulkClearData()" style="padding: 10px 15px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600;">
                     <i class="fas fa-trash-alt"></i> Clear Selected Groups
                 </button>
                 <span id="selectionCount" style="color: #888; font-size: 0.9rem; margin-left: auto;"></span>
-            </div>
-
-            <!-- Search and Filter -->
-            <div class="search-bar">
-                <i class="fas fa-search"></i>
-                <input type="text" id="groupSearch" placeholder="Search groups..." onkeyup="filterGroups()">
             </div>
 
             <!-- Groups Grid -->

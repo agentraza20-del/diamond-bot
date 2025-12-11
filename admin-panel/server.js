@@ -3068,12 +3068,28 @@ io.on('connection', (socket) => {
 const chokidar = require('chokidar');
 const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
     persistent: true,
-    ignoreInitial: true
+    ignoreInitial: true,
+    awaitWriteFinish: {
+        stabilityThreshold: 100,
+        pollInterval: 100
+    }
 });
 
+// Debounce file change emissions (max 1 per second)
+let lastEmitTime = 0;
+const EMIT_DEBOUNCE_MS = 1000; // Wait 1 second between emits
+
 watcher.on('change', (path) => {
-    console.log(`File ${path} changed, emitting update...`);
-    io.emit('dataUpdated', { timestamp: Date.now() });
+    const now = Date.now();
+    
+    // Only emit if enough time has passed since last emit
+    if (now - lastEmitTime >= EMIT_DEBOUNCE_MS) {
+        console.log(`File ${path} changed, emitting update...`);
+        io.emit('dataUpdated', { timestamp: now });
+        lastEmitTime = now;
+    } else {
+        console.log(`File ${path} changed (skipped - debounced)`);
+    }
 });
 
 // Send message to group endpoint

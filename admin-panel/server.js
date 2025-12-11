@@ -647,7 +647,7 @@ app.get('/api/groups', async (req, res) => {
             return {
                 id,
                 name: data.groupName || data.name || 'Unknown Group',
-                rate: data.rate || 85,
+                rate: data.rate || 2.13,
                 dueLimit: data.dueLimit || 0,
                 
                 // All entries (for orders table)
@@ -3046,7 +3046,7 @@ io.on('connection', (socket) => {
                 database.groups[groupId] = {
                     id: groupId,
                     groupName: groupName || 'New Group',
-                    rate: 100, // Default rate
+                    rate: 2.13, // Default rate
                     entries: [],
                     createdAt: timestamp,
                     createdBy: admin,

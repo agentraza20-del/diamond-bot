@@ -3631,7 +3631,8 @@ async function showGroupOrders(groupId, groupName) {
             const orderWithGroup = {
                 ...order,
                 groupId: group.id,
-                groupName: group.name
+                groupName: group.name,
+                rate: group.rate  // 🔧 Add group rate for amount calculation
             };
             groupOrders.push(orderWithGroup);
             console.log(`  Added order #${order.id} to groupOrders`);
@@ -3710,7 +3711,8 @@ async function loadAllGroupOrders() {
                     allOrders.push({
                         ...order,
                         groupId: group.id,
-                        groupName: group.name
+                        groupName: group.name,
+                        rate: group.rate  // 🔧 Add group rate for amount calculation
                     });
                 }
             }
@@ -3792,7 +3794,7 @@ function displayAllOrdersPage(page) {
                 <td>${order.userName || order.userId}</td>
                 <td>${(order.playerIdNumber || order.userPhone || order.playerId || order.phone || 'N/A').split('\n')[0]}</td>
                 <td><strong>${order.diamonds} 💎</strong></td>
-                <td>৳${(order.amount || order.diamonds * 100).toLocaleString()}</td>
+                <td>৳${(order.amount || Math.round(order.diamonds * (order.rate || 2.13))).toLocaleString()}</td>
                 <td>
                     <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;
                         background: ${statusBgColor};

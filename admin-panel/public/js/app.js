@@ -5814,6 +5814,11 @@ async function loadDashboardData() {
         loadTransactions(),
         loadAnalytics()
     ]);
+    
+    // Initialize group details table with 'today' data
+    setTimeout(() => {
+        initializeGroupDetails();
+    }, 500);
 }
 
 // Auto-refresh stats every 1 second for real-time updates
@@ -7009,23 +7014,47 @@ function switchGroupDetailTab(period) {
     loadGroupDetails(period);
 }
 
+// Initialize group details on page load
+function initializeGroupDetails() {
+    // Load 'today' data by default
+    loadGroupDetails('today');
+}
+
 // Load Group Details for specific period
 async function loadGroupDetails(period) {
     const tableBody = document.getElementById('groupDetailsTableBody');
     
-    // Get selected groups
-    const selectedGroupsArray = Array.from(selectedGroups)
+    if (!tableBody) {
+        console.warn('[GROUP DETAILS] Table body element not found');
+        return;
+    }
+    
+    // Show loading state
+    tableBody.innerHTML = '<tr><td colspan="5" class="loading"><i class="fas fa-spinner fa-spin"></i> Loading data...</td></tr>';
+    
+    // Get selected groups - if none selected, use all groups
+    let selectedGroupsArray = Array.from(selectedGroups)
         .map(groupId => allGroups.find(g => g.id === groupId))
         .filter(g => g);
     
+    // If no groups selected, use all available groups
+    if (selectedGroupsArray.length === 0 && allGroups.length > 0) {
+        selectedGroupsArray = allGroups;
+    }
+    
     if (selectedGroupsArray.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="loading">No groups selected</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" class="loading">No groups available</td></tr>';
         return;
     }
     
     try {
         // Fetch period-wise data from backend
         const response = await fetch(`/api/group-details/${period}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const allGroupDetails = await response.json();
         
         // Filter to only show selected groups
@@ -7076,12 +7105,17 @@ async function loadGroupDetails(period) {
             </tr>
         `;
         
-        tableBody.innerHTML = rows + totalRow || '<tr><td colspan="5" class="loading">No data available</td></tr>';
-        console.log(`[GROUP DETAILS] Loaded ${selectedDetails.length} groups for period: ${period} | Total: ৳${totalAmount}`);
+        if (rows) {
+            tableBody.innerHTML = rows + totalRow;
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="5" class="loading">No orders in this period</td></tr>';
+        }
+        
+        console.log(`[GROUP DETAILS] ✅ Loaded ${selectedDetails.length} groups for period: ${period} | Total: ${totalOrders} orders, ৳${totalAmount}`);
         
     } catch (error) {
-        console.error('Error loading group details:', error);
-        tableBody.innerHTML = '<tr><td colspan="5" class="loading">Error loading data</td></tr>';
+        console.error('[GROUP DETAILS] ❌ Error loading group details:', error);
+        tableBody.innerHTML = `<tr><td colspan="5" class="loading" style="color: #ef4444;"><i class="fas fa-exclamation-triangle"></i> Error: ${error.message}</td></tr>`;
     }
 }
 

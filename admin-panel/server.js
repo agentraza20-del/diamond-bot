@@ -3328,13 +3328,25 @@ app.get('/api/group-details/:period', async (req, res) => {
                 // Include approved, processing, or completed statuses (exclude pending/rejected)
                 if (!['approved', 'processing', 'completed'].includes(e.status)) return false;
                 
-                // Check if entry has a valid timestamp
-                if (!e.createdAt) return false;
+                // Get timestamp from either createdAt, timestamp, or orderId
+                let entryTime = null;
+                if (e.createdAt) {
+                    entryTime = new Date(e.createdAt);
+                } else if (e.timestamp) {
+                    entryTime = new Date(e.timestamp);
+                } else if (e.orderId) {
+                    // Extract timestamp from orderId (usually first 13 digits)
+                    const timeMatch = String(e.orderId).match(/^(\d{13})/);
+                    if (timeMatch) {
+                        entryTime = new Date(parseInt(timeMatch[1]));
+                    }
+                }
                 
-                const entryDate = new Date(e.createdAt);
+                // If no valid timestamp found, skip this entry
+                if (!entryTime || isNaN(entryTime.getTime())) return false;
                 
                 // Check if date is within range
-                return entryDate >= dateRange.start && entryDate <= dateRange.end;
+                return entryTime >= dateRange.start && entryTime <= dateRange.end;
             });
             
             const totalDiamonds = filteredEntries.reduce((sum, e) => sum + (e.diamonds || 0), 0);

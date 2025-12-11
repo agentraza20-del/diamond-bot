@@ -174,3 +174,11 @@
 [2025-12-09T19:03:24.553Z] 📢 Due reminder sent to Test bot | Due: ৳13000
 [2025-12-09T19:15:39.099Z] 🗑️ ALL DATA CLEARED BY ADMIN
 [2025-12-09T19:24:07.130Z] 🔐 Admin logged in
+[2025-12-11T07:03:15.676Z] 🔐 Admin logged in
+[2025-12-11T07:10:38.190Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-11T07:10:58.441Z] 🔐 Admin logged in
+[2025-12-11T07:18:57.798Z] 📢 Due reminder sent to Test bot | Due: ৳305000
+[2025-12-11T07:39:56.006Z] 📢 Due reminder sent to Test bot | Due: ৳205000
+[2025-12-11T07:50:54.341Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-11T07:51:33.468Z] 🔐 Admin logged in
+[2025-12-11T07:56:29.626Z] 📢 Due reminder sent to Test bot | Due: ৳5000

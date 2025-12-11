@@ -4,7 +4,7 @@ const socketIo = require('socket.io');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
-const { startAutoApprovalTimer } = require('../utils/auto-approval');
+const { startAutoApprovalTimer, cancelAutoApprovalTimer } = require('../utils/auto-approval');
 
 const app = express();
 const server = http.createServer(app);
@@ -55,7 +55,12 @@ app.use(express.json());
 
 // Authentication middleware
 function requireAuth(req, res, next) {
-    const token = req.headers['authorization'];
+    let token = req.headers['authorization'];
+    
+    // Handle Bearer token format
+    if (token && token.startsWith('Bearer ')) {
+        token = token.substring(7); // Remove 'Bearer ' prefix
+    }
     
     if (!token || !activeSessions.has(token)) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -66,7 +71,12 @@ function requireAuth(req, res, next) {
 
 // Check if admin is logged in
 function isLoggedIn(req, res, next) {
-    const token = req.headers['authorization'];
+    let token = req.headers['authorization'];
+    
+    // Handle Bearer token format
+    if (token && token.startsWith('Bearer ')) {
+        token = token.substring(7); // Remove 'Bearer ' prefix
+    }
     
     if (!token || !activeSessions.has(token)) {
         return res.status(401).json({ success: false, message: 'Not logged in' });
@@ -232,18 +242,19 @@ app.post('/api/admin/change-username', requireAuth, async (req, res) => {
 app.get('/api/stats', async (req, res) => {
     try {
         const users = await readJSON(usersPath);
-        const transactions = await readJSON(transactionsPath);
+        const transactionsData = await readJSON(transactionsPath);
+        const transactions = Array.isArray(transactionsData) ? transactionsData : [];
         const database = await readJSON(databasePath);
 
         const totalUsers = Object.keys(users).length;
         
         // Calculate fixed deposits (approved deposits from transactions)
-        const fixedDeposits = Object.values(transactions).reduce((sum, t) => {
+        const fixedDeposits = transactions.reduce((sum, t) => {
             return sum + ((t && t.status === 'completed' && t.amount) ? t.amount : 0);
         }, 0);
         
         // Calculate total deposits including pending
-        const totalDeposits = Object.values(transactions).reduce((sum, t) => sum + ((t && t.amount) || 0), 0);
+        const totalDeposits = transactions.reduce((sum, t) => sum + ((t && t.amount) || 0), 0);
         
         // Calculate total orders and pending from all groups
         let totalOrders = 0;
@@ -473,14 +484,25 @@ app.get('/api/feature-toggle/duplicate-detection/status', (req, res) => {
 // Get offline detection status specifically
 // Groups Data
 app.get('/api/groups', async (req, res) => {
+    // Set response timeout for this endpoint
+    const timeoutId = setTimeout(() => {
+        if (!res.headersSent) {
+            res.status(504).json({ error: 'Request timeout - Please try again' });
+        }
+    }, 12000); // 12 second timeout
+    
+    res.on('finish', () => clearTimeout(timeoutId));
+    res.on('close', () => clearTimeout(timeoutId));
+    
     try {
         const database = await readJSON(databasePath);
         const users = await readJSON(usersPath);
-        const transactions = await readJSON(transactionsPath);
+        const transactionsData = await readJSON(transactionsPath);
+        const transactions = Array.isArray(transactionsData) ? transactionsData : [];
         const groups = database.groups || {};
         
-        console.log('[API/GROUPS] Total groups in DB:', Object.keys(groups).length);
-        console.log('[API/GROUPS] Group IDs:', Object.keys(groups));
+        // Removed verbose logging for performance
+        // console.log('[API/GROUPS] Total groups in DB:', Object.keys(groups).length);
         
         const groupsArray = Object.entries(groups).map(([id, data]) => {
             const entries = data.entries || [];
@@ -752,16 +774,12 @@ app.post('/api/groups/:groupId/clear', async (req, res) => {
         });
 
         // Clear transactions for this group
-        Object.keys(transactions).forEach(txId => {
-            if (transactions[txId].groupId === groupId) {
-                delete transactions[txId];
-            }
-        });
+        const filteredTransactions = transactions.filter(tx => tx && tx.groupId !== groupId);
 
         // Save all changes
         await writeJSON(databasePath, database);
         await writeJSON(usersPath, users);
-        await writeJSON(transactionsPath, transactions);
+        await writeJSON(transactionsPath, filteredTransactions);
 
         io.emit('groupDataCleared', { groupId });
 
@@ -1163,10 +1181,11 @@ app.post('/api/users/:phone/add-due-balance', async (req, res) => {
 // Transactions
 app.get('/api/transactions', async (req, res) => {
     try {
-        const transactions = await readJSON(transactionsPath);
+        const transactionsData = await readJSON(transactionsPath);
+        const transactions = Array.isArray(transactionsData) ? transactionsData : [];
         const database = await readJSON(databasePath);
         
-        const transactionsArray = Object.entries(transactions).map(([id, data]) => {
+        const transactionsArray = transactions.map((data, index) => {
             // Get group name from database if groupId exists
             let groupName = 'Unknown Group';
             if (data.groupId && database.groups && database.groups[data.groupId]) {
@@ -1176,7 +1195,7 @@ app.get('/api/transactions', async (req, res) => {
             }
 
             return {
-                id,
+                id: data.id || index,
                 phone: data.phone || 'Unknown',
                 amount: data.amount || 0,
                 type: data.type || 'deposit',
@@ -1238,12 +1257,17 @@ app.post('/api/deposits/:depositId/approve', async (req, res) => {
         users[deposit.phone].totalDeposits = (users[deposit.phone].totalDeposits || 0) + deposit.amount;
 
         // Move to transactions
-        const transactions = await readJSON(transactionsPath);
-        transactions[depositId] = {
+        const transactionsData = await readJSON(transactionsPath);
+        const transactions = Array.isArray(transactionsData) ? transactionsData : [];
+        
+        // Add new transaction to array
+        const newTransaction = {
+            id: transactions.length > 0 ? Math.max(...transactions.map(t => t.id || 0)) + 1 : 1,
             ...deposit,
             status: 'completed',
             approvedDate: new Date().toISOString()
         };
+        transactions.push(newTransaction);
 
         // Remove from pending
         delete database.pendingDeposits[depositId];
@@ -1376,17 +1400,20 @@ app.post('/api/orders/:orderId/update-status', async (req, res) => {
                 const entry = entries[entryIndex];
                 const oldStatus = entry.status;
                 
+                // 🛑 If manually approving, cancel any running auto-approval timer
+                if (status === 'approved' && oldStatus === 'processing') {
+                    console.log(`[ORDER UPDATE] 🛑 Manually approved, canceling auto-approval timer for Order ${orderId}`);
+                    cancelAutoApprovalTimer(groupId, orderId);
+                }
+                
                 // Update status
                 entry.status = status;
                 
                 // If marking as done (moving to processing), record the start time
+                // Note: Auto-approval timer is started from WhatsApp bot (index.js), not here
                 if (status === 'processing') {
                     entry.processingStartedAt = new Date().toISOString();
                     entry.processingTimeout = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes from now
-                    
-                    // 🔥 START AUTO-APPROVAL TIMER
-                    console.log(`[ORDER UPDATE] 🤖 Starting 2-minute auto-approval timer for Order ${orderId}`);
-                    startAutoApprovalTimer(groupId, orderId, entry, null);
                 }
                 
                 // Update the database
@@ -2316,6 +2343,10 @@ app.post('/api/send-due-reminders', async (req, res) => {
         const database = await readJSON(databasePath);
         const groups = database.groups || {};
         
+        // Load transactions
+        const transactionsData = await readJSON(transactionsPath);
+        const transactions = Array.isArray(transactionsData) ? transactionsData : [];
+        
         // Read payment numbers
         const paymentNumbersPath = path.join(dbPath, 'payment-number.json');
         const paymentData = await readJSON(paymentNumbersPath);
@@ -2342,7 +2373,13 @@ app.post('/api/send-due-reminders', async (req, res) => {
             
             const totalAmount = approvedEntries.reduce((sum, entry) => sum + (entry.diamonds * entry.rate), 0);
             const totalPaid = group.totalPaid || 0;
-            const totalDue = Math.max(0, totalAmount - totalPaid);
+            
+            // Also consider auto-deductions
+            const autoDeductedAmount = transactions
+                .filter(t => t && t.groupId === groupId && (t.type === 'auto' || t.type === 'auto-deduction'))
+                .reduce((sum, t) => sum + (t.amount || 0), 0);
+            
+            const totalDue = Math.max(0, totalAmount - totalPaid - autoDeductedAmount);
             
             // Only send reminder if group has due amount
             if (totalDue === 0) {
@@ -3071,9 +3108,18 @@ const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
     ignoreInitial: true
 });
 
+let updateTimeout = null;
 watcher.on('change', (path) => {
-    console.log(`File ${path} changed, emitting update...`);
-    io.emit('dataUpdated', { timestamp: Date.now() });
+    // Debounce file change events - wait 2 seconds before emitting
+    if (updateTimeout) {
+        clearTimeout(updateTimeout);
+    }
+    
+    updateTimeout = setTimeout(() => {
+        console.log(`File ${path} changed, emitting update...`);
+        io.emit('dataUpdated', { timestamp: Date.now() });
+        updateTimeout = null;
+    }, 2000); // Increased to 2 seconds to prevent rapid updates
 });
 
 // Send message to group endpoint

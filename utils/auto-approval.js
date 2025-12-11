@@ -109,16 +109,18 @@ function startAutoApprovalTimer(groupId, orderId, entry, client) {
                 console.log(`[AUTO-APPROVAL] ⏳ 2 minutes elapsed for Order ${orderId}, auto-approving...`);
                 
                 // Get fresh entry from database
-                const groupData = db.getGroupData(groupId);
+                const dbData = db.loadDatabase();
+                const groupData = dbData.groups[groupId];
+                
                 if (!groupData || !groupData.entries) {
-                    console.log(`[AUTO-APPROVAL] Group data not found`);
+                    console.log(`[AUTO-APPROVAL] Group ${groupId} data not found in database`);
                     delete processingTimers[timerKey];
                     return;
                 }
                 
-                const currentEntry = groupData.entries.find(e => e.id === orderId);
+                const currentEntry = groupData.entries.find(e => e.id == orderId);
                 if (!currentEntry) {
-                    console.log(`[AUTO-APPROVAL] Order not found`);
+                    console.log(`[AUTO-APPROVAL] Order ${orderId} not found in group ${groupId}`);
                     delete processingTimers[timerKey];
                     return;
                 }
@@ -142,10 +144,18 @@ function startAutoApprovalTimer(groupId, orderId, entry, client) {
                 if (!stockResult.success) {
                     console.log(`[AUTO-APPROVAL] ❌ Stock deduction failed:`, stockResult.error);
                     
-                    // Revert to pending
+                    // Revert to pending - use approveEntry to avoid multiple saves
                     currentEntry.status = 'pending';
                     currentEntry.stockError = stockResult.error;
-                    db.saveDatabase(db.loadDatabase());
+                    
+                    // Save once using database module
+                    const freshDb = db.loadDatabase();
+                    const freshEntry = freshDb.groups[groupId]?.entries?.find(e => e.id == orderId);
+                    if (freshEntry) {
+                        freshEntry.status = 'pending';
+                        freshEntry.stockError = stockResult.error;
+                        db.saveDatabase(freshDb);
+                    }
                     
                     delete processingTimers[timerKey];
                     return;

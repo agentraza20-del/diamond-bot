@@ -1450,7 +1450,52 @@ async function loadLastAutoDeduction() {
         const deductions = await response.json();
         const container = document.getElementById('autoDeductList');
 
+        // If deductions array is empty, try to get from transactions instead
         if (!Array.isArray(deductions) || deductions.length === 0) {
+            // Try to fetch auto-deductions from transactions
+            try {
+                const txResponse = await fetch('/api/transactions');
+                const allTransactions = await txResponse.json();
+                
+                // Filter for auto-deductions from transactions
+                const autoDeductions = allTransactions.filter(t => 
+                    t && (t.type === 'auto' || t.type === 'auto-deduction')
+                );
+                
+                if (Array.isArray(autoDeductions) && autoDeductions.length > 0) {
+                    // Sort by newest first and get only the last one
+                    const sorted = [...autoDeductions].sort((a, b) => 
+                        new Date(b.date || b.createdAt || b.timestamp) - new Date(a.date || a.createdAt || a.timestamp)
+                    );
+                    
+                    const lastDeduction = sorted[0];
+                    const deductionDate = new Date(lastDeduction.date || lastDeduction.createdAt || lastDeduction.timestamp);
+                    const timeAgo = getTimeAgo(deductionDate);
+
+                    container.innerHTML = `
+                        <div class="auto-deduct-item">
+                            <div class="auto-deduct-item-left">
+                                <div class="auto-deduct-item-group">
+                                    <i class="fas fa-layer-group"></i>
+                                    ${lastDeduction.groupName || 'Unknown Group'}
+                                </div>
+                                <div class="auto-deduct-item-time">
+                                    <i class="fas fa-clock"></i>
+                                    ${timeAgo}
+                                </div>
+                            </div>
+                            <div class="auto-deduct-item-amount">
+                                ৳${lastDeduction.amount.toLocaleString()}
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+            } catch (e) {
+                console.error('Error fetching transactions:', e);
+            }
+            
+            // If still no deductions, show placeholder
             container.innerHTML = `
                 <div class="auto-deduct-placeholder">
                     <i class="fas fa-info-circle"></i>
@@ -1509,13 +1554,28 @@ function getTimeAgo(date) {
 // Load Groups
 async function loadGroups() {
     try {
-        const response = await fetch('/api/groups');
+        // Add a loading state
+        const container = document.getElementById('groupsGrid');
+        if (!container.innerHTML.includes('Loading')) {
+            container.innerHTML = '<div class="loading-state" style="grid-column: 1/-1; text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Loading groups...</div>';
+        }
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        const response = await fetch('/api/groups', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+        }
+        
         allGroups = await response.json();
 
-        const container = document.getElementById('groupsGrid');
+        container.innerHTML = '';
         
-        if (allGroups.length === 0) {
-            container.innerHTML = '<div class="loading-state">No groups found</div>';
+        if (!Array.isArray(allGroups) || allGroups.length === 0) {
+            container.innerHTML = '<div class="loading-state" style="grid-column: 1/-1;">No groups found</div>';
             return;
         }
 
@@ -1535,11 +1595,11 @@ async function loadGroups() {
                     </div>
                     <div class="group-info-quick">
                         <div class="quick-info-item">
-                            <span class="info-label">💎 Rate:</span>
+                            <span class="info-label"><i class="fas fa-gem" style="color: #60a5fa; margin-right: 5px;"></i>Rate:</span>
                             <span class="info-value">${group.rate}/tk</span>
                         </div>
                         <div class="quick-info-item">
-                            <span class="info-label">💰 Due:</span>
+                            <span class="info-label"><i class="fas fa-money-bill-wave" style="color: #f59e0b; margin-right: 5px;"></i>Due:</span>
                             <span class="info-value">৳${group.totalDue.toLocaleString()}</span>
                         </div>
                         <button class="reminder-toggle-btn ${groupsMarkedForDueReminder.has(group.id) ? 'active' : ''}" 
@@ -1722,7 +1782,30 @@ async function loadGroups() {
             // This prevents listeners from being lost during page reloads
         }, 100);
     } catch (error) {
+        const container = document.getElementById('groupsGrid');
         console.error('Error loading groups:', error);
+        
+        if (error.name === 'AbortError') {
+            container.innerHTML = `
+                <div class="loading-state" style="grid-column: 1/-1; color: #ff6b6b;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    <p>Loading taking too long - Connection timeout</p>
+                    <button onclick="loadGroups()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Retry
+                    </button>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="loading-state" style="grid-column: 1/-1; color: #ff6b6b;">
+                    <i class="fas fa-exclamation-circle"></i> 
+                    <p>Error loading groups</p>
+                    <button onclick="loadGroups()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Retry
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 
@@ -2544,6 +2627,12 @@ function startProcessingCountdown() {
             const orderId = element.getAttribute('data-order-id');
             const startTime = parseInt(element.getAttribute('data-start-time'));
             
+            // 🔧 Check if this order badge still has status-processing class
+            // If not, it means order is already approved - skip updating to prevent flicker
+            if (!element.classList.contains('status-processing')) {
+                return;
+            }
+            
             // Skip if no valid start time
             if (!startTime || isNaN(startTime)) return;
             
@@ -2748,7 +2837,7 @@ function displayOrdersPage(page) {
     const pageOrders = allOrders.slice(start, end);
 
     if (pageOrders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">No orders found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">No orders found</td></tr>';
         return;
     }
 
@@ -2832,6 +2921,11 @@ function displayOrdersPage(page) {
             offlineBadge = '<span style="display: inline-block; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-right: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Order detected while bot was offline">[OFFLINE]</span>';
         }
         
+        // Show approvedBy only for approved orders
+        const approvedByDisplay = o.status === 'approved' && o.approvedBy 
+            ? `<span style="color: var(--success-color); font-weight: 600;">✅ ${o.approvedBy}</span>` 
+            : '<span style="color: var(--text-secondary);">—</span>';
+        
         return `
             <tr>
                 <td data-label="Phone">${o.userPhone || o.userName || o.phone}</td>
@@ -2839,6 +2933,7 @@ function displayOrdersPage(page) {
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${(o.amount || o.diamonds * 100).toLocaleString()}</td>
                 <td data-label="Status">${offlineBadge}${statusDisplay}</td>
+                <td data-label="Approved By">${approvedByDisplay}</td>
                 <td data-label="Date">${formattedDate}</td>
                 ${actionsHTML}
             </tr>
@@ -3241,7 +3336,7 @@ function displayOrdersByStatus(status) {
     }
 
     if (filteredOrders.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="loading">No ${status === 'all' ? '' : status} orders found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="loading">No ${status === 'all' ? '' : status} orders found</td></tr>`;
         return;
     }
 
@@ -3274,6 +3369,11 @@ function displayOrdersByStatus(status) {
             statusDisplay = `<span class="status-badge status-${o.status}">${statusIcon} ${o.status.toUpperCase()}</span>`;
         }
 
+        // Show approvedBy for approved/processing orders
+        const approvedByDisplay = (o.status === 'approved' || o.status === 'processing') && o.approvedBy 
+            ? `<span style="color: var(--success-color); font-weight: 600;">✅ ${o.approvedBy}</span>` 
+            : '<span style="color: var(--text-secondary);">—</span>';
+        
         return `
             <tr>
                 <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
@@ -3282,6 +3382,7 @@ function displayOrdersByStatus(status) {
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
                 <td data-label="Status">${statusDisplay}</td>
+                <td data-label="Approved By">${approvedByDisplay}</td>
                 <td data-label="Date">${formattedDate}</td>
                 <td data-label="Actions">
                     <div class="order-actions">
@@ -3328,9 +3429,9 @@ async function updateOrderStatus(orderId, status) {
     }
 }
 
-// Approve Order (Mark as Done - starts 2-minute processing countdown)
+// Approve Order (Direct approval from admin panel - no countdown)
 async function approveOrder(orderId) {
-    await updateOrderStatus(orderId, 'processing');
+    await updateOrderStatus(orderId, 'approved');
 }
 
 // Delete Order

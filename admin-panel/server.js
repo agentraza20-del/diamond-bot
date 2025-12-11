@@ -789,6 +789,64 @@ app.post('/api/groups/:groupId/clear', async (req, res) => {
     }
 });
 
+// Bulk Clear Group Data
+app.post('/api/groups/bulk-clear', async (req, res) => {
+    try {
+        const { groupIds } = req.body;
+
+        if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
+            return res.status(400).json({ error: 'Invalid groupIds' });
+        }
+
+        // Read all database files
+        const database = await readJSON(databasePath);
+        const users = await readJSON(usersPath);
+        const transactions = await readJSON(transactionsPath);
+
+        let clearedCount = 0;
+
+        // Clear each group
+        groupIds.forEach(groupId => {
+            // Clear group entries (orders)
+            if (database.groups && database.groups[groupId]) {
+                if (database.groups[groupId].entries) {
+                    database.groups[groupId].entries = [];
+                    clearedCount++;
+                }
+            }
+
+            // Clear user balances for this group
+            Object.keys(users).forEach(phone => {
+                if (users[phone].groups && users[phone].groups[groupId]) {
+                    users[phone].groups[groupId].balance = 0;
+                    users[phone].groups[groupId].totalOrders = 0;
+                    users[phone].groups[groupId].totalDeposits = 0;
+                }
+            });
+        });
+
+        // Clear transactions for these groups
+        const filteredTransactions = transactions.filter(tx => tx && !groupIds.includes(tx.groupId));
+
+        // Save all changes
+        await writeJSON(databasePath, database);
+        await writeJSON(usersPath, users);
+        await writeJSON(transactionsPath, filteredTransactions);
+
+        groupIds.forEach(groupId => {
+            io.emit('groupDataCleared', { groupId });
+        });
+
+        res.json({ 
+            success: true, 
+            count: clearedCount, 
+            message: `${clearedCount} groups cleared successfully` 
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Bulk Update Group Rates
 app.post('/api/groups/bulk-rate', async (req, res) => {
     try {

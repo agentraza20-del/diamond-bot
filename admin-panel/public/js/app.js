@@ -1842,6 +1842,7 @@ function toggleGroupSelection(groupId) {
         selectedGroups.add(groupId);
     }
     updateToggleButton();
+    updateSelectionCount();
 }
 
 // Update toggle select/deselect button state
@@ -2167,6 +2168,79 @@ async function clearGroupData(groupId, groupName) {
     } catch (error) {
         console.error('Error clearing group data:', error);
         showToast('Error deleting data', 'error');
+    }
+}
+
+// Toggle Select All Groups
+function toggleSelectAll() {
+    const allSelected = selectedGroups.size === allGroups.length && allGroups.length > 0;
+    
+    if (allSelected) {
+        // Deselect all
+        selectedGroups.clear();
+    } else {
+        // Select all
+        allGroups.forEach(group => selectedGroups.add(group.id));
+    }
+    
+    loadGroups(); // Refresh to update checkboxes
+    updateSelectionCount();
+}
+
+// Update Selection Count Display
+function updateSelectionCount() {
+    const countEl = document.getElementById('selectionCount');
+    if (countEl) {
+        if (selectedGroups.size > 0) {
+            countEl.textContent = `${selectedGroups.size} group(s) selected`;
+            countEl.style.color = '#667eea';
+            countEl.style.fontWeight = '600';
+        } else {
+            countEl.textContent = '';
+        }
+    }
+}
+
+// Bulk Clear Data
+async function bulkClearData() {
+    if (selectedGroups.size === 0) {
+        showToast('Please select at least one group', 'warning');
+        return;
+    }
+
+    const groupNames = allGroups
+        .filter(g => selectedGroups.has(g.id))
+        .map(g => g.name)
+        .join(', ');
+
+    const confirmMsg = `⚠️ DANGER: You are about to delete ALL data from ${selectedGroups.size} groups:\n\n${groupNames}\n\nThis will delete:\n• All Completed Orders\n• All Pending Orders  \n• All User Balances\n• All Transaction History\n\nThis action CANNOT be undone!\n\nType "DELETE" to confirm:`;
+    
+    const userInput = prompt(confirmMsg);
+    if (userInput !== 'DELETE') {
+        showToast('Deletion cancelled', 'info');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/groups/bulk-clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupIds: Array.from(selectedGroups) })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`${result.count} groups cleared successfully`, 'success');
+            selectedGroups.clear();
+            updateSelectionCount();
+            await silentRefreshData();
+        } else {
+            showToast('Failed to clear groups', 'error');
+        }
+    } catch (error) {
+        console.error('Error clearing groups:', error);
+        showToast('Error clearing groups', 'error');
     }
 }
 

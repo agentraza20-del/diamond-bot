@@ -3598,6 +3598,9 @@ async function restoreOrder(orderId) {
 // Show orders for a specific group
 async function showGroupOrders(groupId, groupName) {
     try {
+        // Clear any previous filters immediately
+        window.filteredAllOrders = null;
+        
         const response = await fetch('/api/groups');
         const groups = await response.json();
 
@@ -3614,7 +3617,7 @@ async function showGroupOrders(groupId, groupName) {
             viewHeader.innerHTML = `<i class="fas fa-list"></i> Orders from ${groupName}`;
         }
 
-        // Store group-specific orders
+        // Store ONLY this group's orders
         let groupOrders = [];
         for (const order of group.entries) {
             groupOrders.push({
@@ -3627,10 +3630,14 @@ async function showGroupOrders(groupId, groupName) {
         // Sort by date (newest first)
         groupOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // Store globally
+        // Store globally - ONLY THIS GROUP'S ORDERS
         window.allGroupOrders = groupOrders;
         window.currentGroupId = groupId;
         window.currentGroupName = groupName;
+        
+        console.log(`🔍 Group-specific view: ${groupName}`);
+        console.log(`📊 Showing ${groupOrders.length} orders from this group only`);
+        console.log(`🔒 currentGroupId set to: ${groupId}`);
 
         if (groupOrders.length === 0) {
             const tbody = document.getElementById('allOrdersTableBody');
@@ -3649,6 +3656,7 @@ async function showGroupOrders(groupId, groupName) {
         console.error('Error loading group orders:', error);
         showNotification('❌ Error loading orders', 'error');
     }
+}
 }
 
 // Load all orders from all groups
@@ -3723,18 +3731,9 @@ function displayAllOrdersPage(page) {
     const tbody = document.getElementById('allOrdersTableBody');
     if (!tbody) return;
 
-    // If we have a currentGroupId, use only that group's orders
-    let ordersToUse = [];
-    if (window.currentGroupId) {
-        // Filter to only show orders from the current group
-        const allOrders = window.allGroupOrders || [];
-        ordersToUse = window.filteredAllOrders 
-            ? window.filteredAllOrders.filter(o => o.groupId === window.currentGroupId)
-            : allOrders.filter(o => o.groupId === window.currentGroupId);
-    } else {
-        // Show all orders if no specific group selected
-        ordersToUse = window.filteredAllOrders || window.allGroupOrders || [];
-    }
+    // Use filtered orders if searching, otherwise use all orders
+    // NOTE: window.allGroupOrders may contain only current group if viewed via showGroupOrders()
+    let ordersToUse = window.filteredAllOrders || window.allGroupOrders || [];
     
     if (ordersToUse.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);"><i class="fas fa-inbox"></i> No orders found</td></tr>';

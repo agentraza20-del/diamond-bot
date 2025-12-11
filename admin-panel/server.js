@@ -239,11 +239,11 @@ app.get('/api/stats', async (req, res) => {
         
         // Calculate fixed deposits (approved deposits from transactions)
         const fixedDeposits = Object.values(transactions).reduce((sum, t) => {
-            return sum + ((t.status === 'completed' && t.amount) ? t.amount : 0);
+            return sum + ((t && t.status === 'completed' && t.amount) ? t.amount : 0);
         }, 0);
         
         // Calculate total deposits including pending
-        const totalDeposits = Object.values(transactions).reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalDeposits = Object.values(transactions).reduce((sum, t) => sum + ((t && t.amount) || 0), 0);
         
         // Calculate total orders and pending from all groups
         let totalOrders = 0;

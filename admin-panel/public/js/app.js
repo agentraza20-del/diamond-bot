@@ -3719,8 +3719,18 @@ function displayAllOrdersPage(page) {
     const tbody = document.getElementById('allOrdersTableBody');
     if (!tbody) return;
 
-    // Use filtered orders if available, otherwise use all orders
-    const ordersToUse = window.filteredAllOrders || window.allGroupOrders || [];
+    // If we have a currentGroupId, use only that group's orders
+    let ordersToUse = [];
+    if (window.currentGroupId) {
+        // Filter to only show orders from the current group
+        const allOrders = window.allGroupOrders || [];
+        ordersToUse = window.filteredAllOrders 
+            ? window.filteredAllOrders.filter(o => o.groupId === window.currentGroupId)
+            : allOrders.filter(o => o.groupId === window.currentGroupId);
+    } else {
+        // Show all orders if no specific group selected
+        ordersToUse = window.filteredAllOrders || window.allGroupOrders || [];
+    }
     
     if (ordersToUse.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);"><i class="fas fa-inbox"></i> No orders found</td></tr>';

@@ -1507,19 +1507,67 @@ function getTimeAgo(date) {
 }
 
 // Load Groups
+// 🔥 CACHE + DEBOUNCE for loadGroups to prevent flickering
+let groupsCache = null;
+let lastGroupsFetch = 0;
+const GROUPS_CACHE_DURATION = 2000; // Cache for 2 seconds
+let groupsLoadTimeout = null;
+
 async function loadGroups() {
     try {
-        const response = await fetch('/api/groups');
-        allGroups = await response.json();
-
-        const container = document.getElementById('groupsGrid');
+        const now = Date.now();
         
-        if (allGroups.length === 0) {
-            container.innerHTML = '<div class="loading-state">No groups found</div>';
+        // 🔥 DEBOUNCE: If we fetched groups less than 1 second ago, skip
+        if (groupsLoadTimeout) {
+            clearTimeout(groupsLoadTimeout);
+        }
+        
+        // Use cache if it's fresh (less than 2 seconds old)
+        if (groupsCache && (now - lastGroupsFetch) < GROUPS_CACHE_DURATION) {
+            console.log('[GROUPS] Using cached data (age: ' + (now - lastGroupsFetch) + 'ms)');
+            renderGroups(groupsCache);
             return;
         }
+        
+        const container = document.getElementById('groupsGrid');
+        if (!container) return;
+        
+        // Show loading state briefly
+        if (!groupsCache || (now - lastGroupsFetch) >= GROUPS_CACHE_DURATION) {
+            container.innerHTML = '<div class="loading-state" style="grid-column: 1/-1;">Loading groups...</div>';
+        }
+        
+        groupsLoadTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch('/api/groups');
+                allGroups = await response.json();
+                
+                // Update cache
+                groupsCache = allGroups;
+                lastGroupsFetch = Date.now();
+                
+                renderGroups(allGroups);
+            } catch (error) {
+                console.error('Error loading groups:', error);
+                container.innerHTML = '<div class="error-state" style="grid-column: 1/-1; color: #f5576c;">Failed to load groups</div>';
+            }
+        }, 300); // Debounce by 300ms
+        
+    } catch (error) {
+        console.error('Error in loadGroups:', error);
+    }
+}
 
-        container.innerHTML = allGroups.map(group => {
+function renderGroups(groups) {
+    const container = document.getElementById('groupsGrid');
+    if (!container) return;
+    
+    if (!groups || groups.length === 0) {
+        container.innerHTML = '<div class="loading-state" style="grid-column: 1/-1;">No groups found</div>';
+        return;
+    }
+
+    container.innerHTML = groups.map(group => {
             const isExpanded = expandedGroups.has(group.id);
             const isSelected = selectedGroups.has(group.id);
             

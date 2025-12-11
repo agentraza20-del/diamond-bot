@@ -3315,6 +3315,10 @@ app.get('/api/group-details/:period', async (req, res) => {
         
         const dateRange = getDateRange(period);
         
+        // Load users data to calculate dues
+        const usersData = await readJSON(usersPath);
+        const users = usersData.users || {};
+        
         // Calculate group stats for period with actual date filtering
         const groupStats = Object.entries(groups).map(([groupId, groupData]) => {
             const entries = groupData.entries || [];
@@ -3336,13 +3340,25 @@ app.get('/api/group-details/:period', async (req, res) => {
             const totalDiamonds = filteredEntries.reduce((sum, e) => sum + (e.diamonds || 0), 0);
             const totalAmount = filteredEntries.reduce((sum, e) => sum + (e.diamonds * (e.rate || 0)), 0);
             
+            // 💰 Calculate total due from user balances (negative balance = due)
+            let totalDue = 0;
+            Object.values(users).forEach(user => {
+                // Check if user has activity in this group
+                if (user.groups && user.groups[groupId]) {
+                    const balance = user.groups[groupId].balance || 0;
+                    if (balance < 0) {
+                        totalDue += Math.abs(balance); // Negative balance = due amount
+                    }
+                }
+            });
+            
             return {
                 id: groupId,
                 name: groupData.groupName || groupData.name || 'Unknown',
                 diamonds: totalDiamonds,
                 amount: Math.round(totalAmount),
                 orders: filteredEntries.length,
-                due: groupData.totalDue || 0,
+                due: Math.round(totalDue),
                 period: period
             };
         });

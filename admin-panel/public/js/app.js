@@ -1509,34 +1509,17 @@ function getTimeAgo(date) {
 // Load Groups
 async function loadGroups() {
     try {
-        const container = document.getElementById('groupsGrid');
-        if (!container) return;
-
-        container.innerHTML = '<div class="loading-state" style="grid-column: 1/-1;">Loading groups...</div>';
-
         const response = await fetch('/api/groups');
         allGroups = await response.json();
-        
-        renderGroups(allGroups);
-    } catch (error) {
-        console.error('Error loading groups:', error);
+
         const container = document.getElementById('groupsGrid');
-        if (container) {
-            container.innerHTML = '<div class="error-state" style="grid-column: 1/-1; color: #f5576c;">Failed to load groups</div>';
+        
+        if (allGroups.length === 0) {
+            container.innerHTML = '<div class="loading-state">No groups found</div>';
+            return;
         }
-    }
-}
 
-function renderGroups(groups) {
-    const container = document.getElementById('groupsGrid');
-    if (!container) return;
-    
-    if (!groups || groups.length === 0) {
-        container.innerHTML = '<div class="loading-state" style="grid-column: 1/-1;">No groups found</div>';
-        return;
-    }
-
-    container.innerHTML = groups.map(group => {
+        container.innerHTML = allGroups.map(group => {
             const isExpanded = expandedGroups.has(group.id);
             const isSelected = selectedGroups.has(group.id);
             

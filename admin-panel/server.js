@@ -500,7 +500,7 @@ app.get('/api/groups', async (req, res) => {
             let totalPaidFromTransactions = 0;
             if (Array.isArray(transactions)) {
                 totalPaidFromTransactions = transactions
-                    .filter(t => t.groupId === id && t.status === 'approved')
+                    .filter(t => t && t.groupId === id && t.status === 'approved')
                     .reduce((sum, t) => sum + (t.amount || 0), 0);
             }
             
@@ -525,7 +525,7 @@ app.get('/api/groups', async (req, res) => {
                 let userPaidAmount = 0;
                 if (Array.isArray(transactions)) {
                     userPaidAmount = transactions
-                        .filter(t => t.userId === userId && t.groupId === id && t.status === 'approved' && (t.type === 'auto' || t.type === 'auto-deduction'))
+                        .filter(t => t && t.userId === userId && t.groupId === id && t.status === 'approved' && (t.type === 'auto' || t.type === 'auto-deduction'))
                         .reduce((sum, t) => sum + (t.amount || 0), 0);
                 }
                 
@@ -3068,28 +3068,12 @@ io.on('connection', (socket) => {
 const chokidar = require('chokidar');
 const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
     persistent: true,
-    ignoreInitial: true,
-    awaitWriteFinish: {
-        stabilityThreshold: 100,
-        pollInterval: 100
-    }
+    ignoreInitial: true
 });
 
-// Debounce file change emissions (max 1 per second)
-let lastEmitTime = 0;
-const EMIT_DEBOUNCE_MS = 1000; // Wait 1 second between emits
-
 watcher.on('change', (path) => {
-    const now = Date.now();
-    
-    // Only emit if enough time has passed since last emit
-    if (now - lastEmitTime >= EMIT_DEBOUNCE_MS) {
-        console.log(`File ${path} changed, emitting update...`);
-        io.emit('dataUpdated', { timestamp: now });
-        lastEmitTime = now;
-    } else {
-        console.log(`File ${path} changed (skipped - debounced)`);
-    }
+    console.log(`File ${path} changed, emitting update...`);
+    io.emit('dataUpdated', { timestamp: Date.now() });
 });
 
 // Send message to group endpoint

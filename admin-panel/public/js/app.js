@@ -3879,9 +3879,16 @@ function filterAllOrders() {
     if (!searchInput) return;
 
     const searchTerm = searchInput.value.toLowerCase();
+    
+    // Use allGroupOrders which contains only the current group's orders
     const allOrders = window.allGroupOrders || [];
+    
+    // If we have a currentGroupId, ensure we only filter orders from that group
+    const ordersToFilter = window.currentGroupId 
+        ? allOrders.filter(order => order.groupId === window.currentGroupId)
+        : allOrders;
 
-    let filteredOrders = allOrders.filter(order => 
+    let filteredOrders = ordersToFilter.filter(order => 
         order.id.toString().includes(searchTerm) ||
         (order.groupName && order.groupName.toLowerCase().includes(searchTerm)) ||
         (order.userName && order.userName.toLowerCase().includes(searchTerm)) ||

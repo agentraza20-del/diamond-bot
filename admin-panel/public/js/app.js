@@ -3600,16 +3600,28 @@ async function showGroupOrders(groupId, groupName) {
     try {
         // Clear any previous filters immediately
         window.filteredAllOrders = null;
+        window.currentGroupId = groupId;
+        window.currentGroupName = groupName;
+        
+        console.log(`📍 showGroupOrders called with groupId=${groupId}, groupName=${groupName}`);
         
         const response = await fetch('/api/groups');
         const groups = await response.json();
+        
+        console.log(`📡 API returned ${groups.length} groups`);
 
         // Find the group
         const group = groups.find(g => g.id === groupId);
+        console.log(`🔍 Looking for group with id: ${groupId}`);
+        console.log(`✓ Found group: ${group ? group.name : 'NOT FOUND'}`);
+        
         if (!group || !group.entries) {
+            console.error(`❌ Group not found or no entries for id: ${groupId}`);
             showNotification('❌ Group not found', 'error');
             return;
         }
+
+        console.log(`📦 Group has ${group.entries.length} entries`);
 
         // Update view header with group name
         const viewHeader = document.querySelector('#allOrdersView .view-header h1');
@@ -3630,14 +3642,15 @@ async function showGroupOrders(groupId, groupName) {
         // Sort by date (newest first)
         groupOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+        console.log(`📊 Created array with ${groupOrders.length} orders for this group ONLY`);
+        console.log(`💾 window.allGroupOrders will contain ONLY ${groupOrders.length} orders`);
+
         // Store globally - ONLY THIS GROUP'S ORDERS
         window.allGroupOrders = groupOrders;
-        window.currentGroupId = groupId;
-        window.currentGroupName = groupName;
         
-        console.log(`🔍 Group-specific view: ${groupName}`);
-        console.log(`📊 Showing ${groupOrders.length} orders from this group only`);
-        console.log(`🔒 currentGroupId set to: ${groupId}`);
+        console.log(`✅ window.allGroupOrders.length = ${window.allGroupOrders.length}`);
+        console.log(`✅ window.currentGroupId = ${window.currentGroupId}`);
+        console.log(`✅ window.currentGroupName = ${window.currentGroupName}`);
 
         if (groupOrders.length === 0) {
             const tbody = document.getElementById('allOrdersTableBody');
@@ -3651,9 +3664,9 @@ async function showGroupOrders(groupId, groupName) {
 
         // Switch to view
         showView('allOrdersView');
-        console.log(`✅ Loaded ${groupOrders.length} orders from group: ${groupName}`);
+        console.log(`🎉 SUCCESS: Loaded ${groupOrders.length} orders from group: ${groupName}`);
     } catch (error) {
-        console.error('Error loading group orders:', error);
+        console.error('❌ Error loading group orders:', error);
         showNotification('❌ Error loading orders', 'error');
     }
 }

@@ -302,89 +302,6 @@
                 </div>
             </div>
 
-            <!-- Select & Calculate Section -->
-            <div class="section">
-                <h2><i class="fas fa-calculator"></i> Select Groups & Calculate</h2>
-                <div class="select-actions">
-                        <button class="btn-secondary" id="toggleSelectBtn" onclick="toggleSelectAll()">
-                            <i class="fas fa-check-square"></i> Select All
-                        </button>
-                        <button class="btn-secondary btn-calculate" onclick="calculateSelectedDiamonds()">
-                            <i class="fas fa-calculator"></i> Calculate Total
-                        </button>
-                    </div>
-                    
-                    <div class="calculation-result" id="calculationResult" style="display: none;">
-                        <div class="result-card">
-                            <h3>📊 Selected Groups Summary</h3>
-                            <div class="result-stats">
-                                <div class="result-stat">
-                                    <span class="result-label">Total Groups Selected:</span>
-                                    <span class="result-value" id="selectedGroupCount">0</span>
-                                </div>
-                                <div class="result-stat">
-                                    <span class="result-label">Total Diamonds:</span>
-                                    <span class="result-value diamond-highlight" id="totalDiamondsSelected">💎 0</span>
-                                </div>
-                                <div class="result-stat">
-                                    <span class="result-label">Total Amount:</span>
-                                    <span class="result-value amount-highlight" id="totalAmountSelected">৳0</span>
-                                </div>
-                                <div class="result-stat">
-                                    <span class="result-label">Total Paid:</span>
-                                    <span class="result-value" id="totalPaidSelected">৳0</span>
-                                </div>
-                                <div class="result-stat">
-                                    <span class="result-label">Total Due:</span>
-                                    <span class="result-value due-highlight" id="totalDueSelected">৳0</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Group Details Chart -->
-                        <div class="group-details-section">
-                            <h3>📈 Group-wise Performance Details</h3>
-                            <div class="tabs-group-details">
-                                <button class="tab-detail active" onclick="switchGroupDetailTab('today')">
-                                    <i class="fas fa-calendar-day"></i> Today
-                                </button>
-                                <button class="tab-detail" onclick="switchGroupDetailTab('yesterday')">
-                                    <i class="fas fa-calendar"></i> Yesterday
-                                </button>
-                                <button class="tab-detail" onclick="switchGroupDetailTab('weekly')">
-                                    <i class="fas fa-calendar-week"></i> Weekly
-                                </button>
-                                <button class="tab-detail" onclick="switchGroupDetailTab('monthly')">
-                                    <i class="fas fa-calendar-alt"></i> Monthly
-                                </button>
-                            </div>
-
-                            <div class="group-details-table">
-                                <table class="details-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Group Name</th>
-                                            <th>💎 Diamonds</th>
-                                            <th>💰 Amount (৳)</th>
-                                            <th>📊 Sales</th>
-                                            <th>📈 Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="groupDetailsTableBody">
-                                        <tr><td colspan="5" class="loading">Loading group details...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-            </div>
-
-            <!-- Search and Filter -->
-            <div class="search-bar">
-                <i class="fas fa-search"></i>
-                <input type="text" id="groupSearch" placeholder="Search groups..." onkeyup="filterGroups()">
-            </div>
-
             <!-- Bulk Actions -->
             <div class="bulk-actions" style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
                 <button id="toggleSelectBtn" class="btn-bulk-action" onclick="toggleSelectAll()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600;">
@@ -394,6 +311,12 @@
                     <i class="fas fa-trash-alt"></i> Clear Selected Groups
                 </button>
                 <span id="selectionCount" style="color: #888; font-size: 0.9rem; margin-left: auto;"></span>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="groupSearch" placeholder="Search groups..." onkeyup="filterGroups()">
             </div>
 
             <!-- Groups Grid -->

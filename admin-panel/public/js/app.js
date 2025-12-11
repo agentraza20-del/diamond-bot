@@ -3657,6 +3657,10 @@ async function loadAllGroupOrders() {
         const tbody = document.getElementById('allOrdersTableBody');
         if (!tbody) return;
 
+        // Clear group-specific filter
+        window.currentGroupId = null;
+        window.filteredAllOrders = null;
+
         // Reset header
         const viewHeader = document.querySelector('#allOrdersView .view-header h1');
         if (viewHeader) {

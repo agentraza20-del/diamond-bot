@@ -93,11 +93,15 @@ const io = socketIo(server, {
         allowEIO3: true
     },
     transports: ['websocket', 'polling'],
-    pingInterval: 25000,
-    pingTimeout: 60000,
+    pingInterval: 20000,             // Send ping every 20 seconds (reduced from 25)
+    pingTimeout: 45000,              // Wait 45 seconds for pong (reduced from 60)
     allowUpgrades: true,
     maxHttpBufferSize: 1e6,
-    perMessageDeflate: false
+    perMessageDeflate: false,
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    }
 });
 
 // 📡 Make Socket.IO available globally for broadcasting from bot
@@ -3972,20 +3976,32 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n✅ [SOCKET.IO] Server ready - Bot can now connect on port ${PORT}\n`);
 });
 
-// Socket.IO connection logging
+// Socket.IO connection logging with detailed tracking
 io.on('connection', (socket) => {
-    console.log(`[SOCKET.IO] Client connected: ${socket.id}`);
+    console.log(`[SOCKET.IO] ✅ Client connected: ${socket.id}`);
     console.log(`[SOCKET.IO] Total clients: ${io.engine.clientsCount}`);
     
-    socket.on('disconnect', () => {
-        console.log(`[SOCKET.IO] Client disconnected: ${socket.id}`);
+    socket.on('disconnect', (reason) => {
+        console.log(`[SOCKET.IO] ❌ Client disconnected: ${socket.id}`);
+        console.log(`[SOCKET.IO]    Reason: ${reason}`);
+        console.log(`[SOCKET.IO]    Remaining clients: ${io.engine.clientsCount}`);
+    });
+
+    socket.on('error', (error) => {
+        console.error(`[SOCKET.IO] 🔴 Socket error (${socket.id}):`, error);
     });
     
-    socket.on('error', (error) => {
-        console.error(`[SOCKET.IO] Socket error (${socket.id}):`, error);
+    // Monitor connection health
+    socket.on('ping', () => {
+        console.log(`[SOCKET.IO] 📍 Ping from ${socket.id}`);
+        socket.emit('pong');
     });
 });
 
 io.engine.on('connection_error', (err) => {
-    console.error('[SOCKET.IO] Engine connection error:', err);
+    console.error('[SOCKET.IO] 🔴 Engine connection error:', err);
+});
+
+io.engine.on('initial_headers_sent', (headers, req) => {
+    console.log(`[SOCKET.IO] 🔗 Connection established with ${req.socket.remoteAddress}`);
 });

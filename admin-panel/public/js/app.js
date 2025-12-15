@@ -454,12 +454,17 @@ async function restoreOrder(orderId) {
     }
 }
 
-// Socket.IO Connection with Auto-Reconnect
+// Socket.IO Connection with Auto-Reconnect & Heartbeat
 const socket = io({
     reconnection: true,
     reconnectionDelay: 1000,        // Start with 1 second
     reconnectionDelayMax: 5000,     // Max 5 seconds
-    reconnectionAttempts: Infinity  // Try forever
+    reconnectionAttempts: Infinity, // Try forever
+    transports: ['websocket', 'polling'],  // Try websocket first, fallback to polling
+    upgrade: true,                   // Allow upgrade from polling to websocket
+    pingInterval: 25000,             // Send ping every 25 seconds
+    pingTimeout: 60000,              // Wait 60 seconds for pong before disconnecting
+    rememberUpgrade: true            // Remember transport preference
 });
 
 // Global State
@@ -728,20 +733,45 @@ document.getElementById('langToggle').addEventListener('click', () => {
 // Socket.IO Listeners
 function initSocketListeners() {
     socket.on('connect', () => {
-        console.log('✅ Connected to server');
+        console.log('✅ Connected to server (Socket ID: ' + socket.id + ')');
         showToast('✅ Admin panel connected', 'success');
         
         // Sync pending orders on reconnect
         syncPendingOrdersOnReconnect();
+        
+        // Clear any disconnect warnings
+        hideConnectionWarning();
     });
 
-    socket.on('disconnect', () => {
-        console.log('❌ Disconnected from server');
+    socket.on('disconnect', (reason) => {
+        console.warn('❌ Disconnected from server. Reason:', reason);
         showToast('❌ Admin panel disconnected - reconnecting...', 'warning');
+        showConnectionWarning('সংযোগ হারিয়েছি, পুনরায় সংযোগ করছি...');
     });
 
     socket.on('connect_error', (error) => {
-        console.warn('Connection error:', error);
+        console.warn('⚠️ Connection error:', error);
+        // Show warning but don't block UI
+        if (error.message) {
+            console.log(`[SOCKET ERROR] ${error.message}`);
+        }
+    });
+
+    socket.on('error', (error) => {
+        console.error('🔴 Socket error:', error);
+        showConnectionWarning('সংযোগ সমস্যা। দয়া করে পৃষ্ঠা রিফ্রেশ করুন।');
+    });
+
+    socket.on('reconnect_attempt', () => {
+        console.log('🔄 Attempting to reconnect...');
+        hideConnectionWarning();
+    });
+
+    socket.on('reconnect', () => {
+        console.log('✅ Reconnected successfully!');
+        showToast('✅ পুনরায় সংযুক্ত হয়েছি', 'success');
+        hideConnectionWarning();
+        syncPendingOrdersOnReconnect();
     });
 
     socket.on('dataUpdated', () => {
@@ -7730,5 +7760,71 @@ setTimeout(() => {
     };
 }, 100);
 
+
 console.log('[BG REFRESH INDICATOR] ✅ Background refresh indicator system initialized');
 console.log('[FEATURE TOGGLE] ✅ Feature toggle management system initialized');
+
+/**
+ * 🔌 CONNECTION STATUS MONITORING
+ * Show/hide connection warning banner
+ */
+function showConnectionWarning(message) {
+    let warningBanner = document.getElementById('connectionWarningBanner');
+    if (!warningBanner) {
+        warningBanner = document.createElement('div');
+        warningBanner.id = 'connectionWarningBanner';
+        warningBanner.style.cssText = `
+            position: fixed;
+            top: 60px;
+            right: 0;
+            left: 0;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            padding: 12px 20px;
+            font-weight: 500;
+            text-align: center;
+            z-index: 9999;
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+            animation: slideDown 0.3s ease-out;
+        `;
+        document.body.insertBefore(warningBanner, document.body.firstChild);
+        
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    transform: translateY(-100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    warningBanner.textContent = message || '⚠️ সংযোগ হারিয়েছি, পুনরায় সংযোগ করছি...';
+    warningBanner.style.display = 'block';
+}
+
+function hideConnectionWarning() {
+    const warningBanner = document.getElementById('connectionWarningBanner');
+    if (warningBanner) {
+        warningBanner.style.display = 'none';
+    }
+}
+
+/**
+ * ✅ SYNC PENDING ORDERS ON RECONNECT
+ * When connection drops and reconnects, resync pending orders
+ */
+function syncPendingOrdersOnReconnect() {
+    console.log('[RECONNECT] 🔄 Syncing pending orders after reconnect...');
+    // Trigger a fresh load of pending orders
+    loadOrdersNew();
+    loadStats();
+    console.log('[RECONNECT] ✅ Sync triggered');
+}
+

@@ -842,7 +842,8 @@ function initSocketListeners() {
     socket.on('orderPermanentlyDeleted', (data) => {
         console.log(`[REAL-TIME UPDATE] 🗑️ Order permanently deleted:`, data);
         showNotification(`⚠️ Order ${data.order.userName} (${data.order.diamonds}💎) permanently deleted`, 'warning');
-        loadOrdersNew(); // Reload to remove from UI
+        // Don't call loadOrdersNew() - the polling will handle it
+        // loadOrdersNew(); // Removed to prevent excessive reloads
     });
 
     // 📊 NEW ORDER CREATED - Real-time add to table
@@ -877,6 +878,22 @@ function initSocketListeners() {
             
             // 🔔 Update notification badge when order is approved
             updateNotificationBadge();
+        }
+    });
+    
+    // ✅ NEW: Missing Orders Recovered Event
+    socket.on('missingOrdersRecovered', (data) => {
+        console.log(`[MISSING ORDERS RECOVERED] ✨ Recovered ${data.recoveredCount} orders:`, data);
+        
+        if (data.recoveredCount > 0) {
+            showNotification(`✨ ${data.recoveredCount} missing order(s) recovered!`, 'success');
+            
+            data.orders.forEach(order => {
+                console.log(`  ✅ Order ${order.id}: ${order.userName} (${order.diamonds}💎)`);
+            });
+            
+            // Reload orders to show the recovered ones
+            loadOrdersNew();
         }
     });
 }
@@ -2187,6 +2204,62 @@ function toggleSelectAll() {
     updateSelectionCount();
 }
 
+// Start Selected Groups - Send start message to selected groups only
+async function startSelectedGroups() {
+    // Check if any groups are selected
+    if (selectedGroups.size === 0) {
+        showToast('❌ Please select at least one group first!', 'warning');
+        return;
+    }
+    
+    const selectedGroupsList = allGroups.filter(g => selectedGroups.has(g.id));
+    const groupNames = selectedGroupsList.map(g => g.name).join('\n• ');
+    
+    // Confirm action
+    const confirm = window.confirm(`🚀 Start Selected Groups?\n\n📊 ${selectedGroups.size} group(s) selected:\n• ${groupNames}\n\n📨 Start message will be sent to these groups\n\nContinue?`);
+    
+    if (!confirm) {
+        showToast('Action cancelled', 'info');
+        return;
+    }
+    
+    // Show loading toast
+    showToast(`Starting ${selectedGroups.size} groups...`, 'info');
+    
+    // Send start message to selected groups
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const group of selectedGroupsList) {
+        try {
+            const response = await fetch('/api/send-start-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId: group.id })
+            });
+            
+            if (response.ok) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+            
+            // Small delay between messages
+            await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+            console.error('Error sending start message:', error);
+            failCount++;
+        }
+    }
+    
+    // Show result
+    if (failCount === 0) {
+        showToast(`✅ Started ${successCount} group(s) successfully!`, 'success');
+    } else {
+        showToast(`⚠️ Started ${successCount} groups, ${failCount} failed`, 'warning');
+    }
+}
+
 // Update Selection Count Display
 function updateSelectionCount() {
     const countEl = document.getElementById('selectionCount');
@@ -2570,8 +2643,8 @@ function displayOfflineOrdersPage(page) {
 
         return `
             <tr>
-                <td data-label="Phone">${o.userPhone || o.userName || 'N/A'}</td>
-                <td data-label="ID/Number">${o.userPhone || o.userId || 'N/A'}</td>
+                <td data-label="Phone">${o.userName || 'N/A'}</td>
+                <td data-label="ID/Number">${o.playerId || o.playerIdNumber || o.userPhone || o.userId || 'N/A'}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${(o.amount || o.diamonds * 100).toLocaleString()}</td>
                 <td data-label="Status">${statusDisplay}</td>
@@ -2676,8 +2749,8 @@ function filterOfflineOrders() {
 
         return `
             <tr>
-                <td data-label="Phone">${o.userPhone || o.userName || 'N/A'}</td>
-                <td data-label="ID/Number">${o.userPhone || o.userId || 'N/A'}</td>
+                <td data-label="Phone">${o.userName || 'N/A'}</td>
+                <td data-label="ID/Number">${o.playerId || o.playerIdNumber || o.userPhone || o.userId || 'N/A'}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${(o.amount || o.diamonds * 100).toLocaleString()}</td>
                 <td data-label="Status">${statusDisplay}</td>
@@ -2775,22 +2848,26 @@ document.addEventListener('DOMContentLoaded', () => {
 // Real-time polling system - refreshes orders every 1 second for real-time updates
 let ordersPollingInterval = null;
 let isOrdersViewActive = false;
+let isRefreshing = false;
+let pendingRefresh = false;
 
 function startOrdersPolling() {
     if (ordersPollingInterval) return; // Already polling
     
-    console.log('[ORDERS POLLING] Started - updating every 1 second (Real-Time)');
+    console.log('[ORDERS POLLING] Started - updating every 3 seconds (Optimized)');
     isOrdersViewActive = true;
     
     // Initial load
     loadOrdersNew();
     
-    // Refresh every 1 second while Orders view is active
+    // Refresh every 3 seconds while Orders view is active (reduced from 1 second)
     ordersPollingInterval = setInterval(() => {
-        if (isOrdersViewActive) {
+        if (isOrdersViewActive && !isRefreshing) {
             silentRefreshOrders();
+        } else if (isOrdersViewActive && isRefreshing) {
+            pendingRefresh = true;
         }
-    }, 1000);
+    }, 3000); // Changed from 1000 to 3000 (3 seconds)
 }
 
 function stopOrdersPolling() {
@@ -2820,6 +2897,9 @@ async function loadOrdersNew() {
             allOrders = await response.json();
         }
 
+        // ✅ SORT BY NEWEST FIRST (descending order by createdAt)
+        allOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
         const tbody = document.getElementById('ordersTableNew');
         
         if (allOrders.length === 0) {
@@ -2836,6 +2916,7 @@ async function loadOrdersNew() {
         displayOrdersByStatus('pending');
         displayOrdersByStatus('processing');
         displayOrdersByStatus('approved');
+        displayOrdersByStatus('deleted');  // ✅ ADD: Deleted orders tab
         
         // Render pagination controls
         renderOrdersPagination(allOrders.length);
@@ -2857,6 +2938,10 @@ async function loadOrdersNew() {
 // This function refreshes orders silently without page reload
 async function silentRefreshOrders() {
     try {
+        // Prevent simultaneous refreshes
+        if (isRefreshing) return;
+        isRefreshing = true;
+        
         // Save current scroll position
         const bodyScrollY = window.scrollY || document.documentElement.scrollTop;
         const mainContent = document.querySelector('.main-content');
@@ -2864,6 +2949,9 @@ async function silentRefreshOrders() {
         
         const response = await fetch('/api/orders');
         const newOrders = await response.json();
+        
+        // ✅ SORT BY NEWEST FIRST (descending order by createdAt)
+        newOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         
         // Only update if data has changed
         if (JSON.stringify(newOrders) !== JSON.stringify(allOrders)) {
@@ -2890,6 +2978,14 @@ async function silentRefreshOrders() {
         }
     } catch (error) {
         console.log('[SILENT REFRESH] Error:', error.message);
+    } finally {
+        isRefreshing = false;
+        
+        // If refresh was requested while we were refreshing, do it now
+        if (pendingRefresh) {
+            pendingRefresh = false;
+            silentRefreshOrders();
+        }
     }
 }
 
@@ -2982,6 +3078,9 @@ function displayOrdersPage(page) {
                         <button class="btn-action btn-restore" onclick="restoreOrder('${o.id}')" title="Restore Order" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                             <i class="fas fa-undo"></i> Restore
                         </button>
+                        <button class="btn-action btn-permanent-delete" onclick="permanentDeleteOrder('${o.id}')" title="Permanent Delete" style="background: linear-gradient(135deg, #d63031 0%, #eb2f06 100%);">
+                            <i class="fas fa-times-circle"></i> Permanent
+                        </button>
                     </div>
                 </td>
             `;
@@ -3002,8 +3101,9 @@ function displayOrdersPage(page) {
         
         return `
             <tr>
-                <td data-label="Phone">${o.userPhone || o.userName || o.phone}</td>
-                <td data-label="ID/Number">${o.userPhone || o.playerId || o.userId}</td>
+                <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
+                <td data-label="User">${o.userName || 'N/A'}</td>
+                <td data-label="ID/Number">${o.playerId || o.playerIdNumber || o.userPhone || o.userId}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${(o.amount || o.diamonds * 100).toLocaleString()}</td>
                 <td data-label="Status">${offlineBadge}${statusDisplay}</td>
@@ -3124,7 +3224,7 @@ function filterOrdersPage(page) {
         
         return `
             <tr>
-                <td data-label="Phone">${o.phone}</td>
+                <td data-label="Phone">${o.userName || 'N/A'}</td>
                 <td data-label="ID/Number">${o.playerId}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
@@ -3321,7 +3421,7 @@ function filterOrders() {
         return `
             <tr>
                 <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
-                <td data-label="Phone">${o.phone}</td>
+                <td data-label="Phone">${o.userName || 'N/A'}</td>
                 <td data-label="ID/Number">${o.playerId}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
@@ -3448,22 +3548,26 @@ function displayOrdersByStatus(status) {
             ? `<span style="color: var(--success-color); font-weight: 600;">✅ ${o.approvedBy}</span>` 
             : '<span style="color: var(--text-secondary);">—</span>';
         
+        // Format date properly
+        const dateObj = new Date(o.date);
+        const displayDate = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-US') + ', ' + dateObj.toLocaleTimeString('en-US') : 'Invalid Date';
+        
         return `
             <tr>
                 <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
-                <td data-label="Phone">${o.phone}</td>
-                <td data-label="ID/Number">${o.playerId}</td>
+                <td data-label="User">${o.userName || 'N/A'}</td>
+                <td data-label="ID/Number">${o.playerId || o.playerIdNumber || o.userPhone || 'N/A'}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
                 <td data-label="Status">${statusDisplay}</td>
                 <td data-label="Approved By">${approvedByDisplay}</td>
-                <td data-label="Date">${formattedDate}</td>
+                <td data-label="Date">${displayDate}</td>
                 <td data-label="Actions">
                     <div class="order-actions">
                         ${o.status === 'deleted' ? `<button class="btn-action btn-restore" onclick="restoreOrder('${o.id}')" title="Restore Order"><i class="fas fa-undo"></i> Restore</button>` : ''}
                         ${o.status === 'pending' ? `<button class="btn-action btn-approve" onclick="approveOrder('${o.id}')" title="Approve Order"><i class="fas fa-check"></i> Approve</button>` : ''}
                         ${o.status !== 'deleted' ? `<button class="btn-action btn-delete" onclick="deleteOrder('${o.id}')" title="Soft Delete"><i class="fas fa-trash"></i> Delete</button>` : ''}
-                        <button class="btn-action btn-permanent-delete" onclick="permanentDeleteOrder('${o.id}')" title="Permanent Delete" style="background: linear-gradient(135deg, #d63031 0%, #eb2f06 100%);"><i class="fas fa-times-circle"></i> Permanent</button>
+                        ${o.status === 'deleted' ? `<button class="btn-action btn-permanent-delete" onclick="permanentDeleteOrder('${o.id}')" title="Permanent Delete" style="background: linear-gradient(135deg, #d63031 0%, #eb2f06 100%);"><i class="fas fa-times-circle"></i> Permanent</button>` : ''}
                     </div>
                 </td>
             </tr>
@@ -3495,7 +3599,19 @@ async function updateOrderStatus(orderId, status) {
             // Refresh orders immediately to show updated status
             await loadOrdersNew();
         } else {
-            showNotification(`❌ Error: ${data.error}`, 'error');
+            // ✅ NEW: Handle missing order case
+            if (data.error && data.error.includes('not found') && data.error.includes('will be recovered')) {
+                console.warn(`⚠️ Order ${orderId} not currently in admin panel`);
+                showNotification(`⚠️ Order will be recovered from WhatsApp history as Missing Order...`, 'warning');
+                showNotification(`✅ System will detect and add it as Processing order`, 'info');
+                
+                // Refresh after a delay to show the recovered order
+                setTimeout(async () => {
+                    await loadOrdersNew();
+                }, 2000);
+            } else {
+                showNotification(`❌ Error: ${data.error}`, 'error');
+            }
         }
     } catch (error) {
         console.error('Error updating order status:', error);
@@ -3588,6 +3704,53 @@ async function restoreOrder(orderId) {
     } catch (error) {
         console.error('Error restoring order:', error);
         showNotification(`❌ Error restoring order: ${error.message}`, 'error');
+    }
+}
+
+// ✅ NEW: Recover Missing Orders from WhatsApp
+async function recoverMissingOrders() {
+    try {
+        // Get current group from the selected tab or use first group
+        let groupId = currentGroupId || (allGroups && allGroups.length > 0 ? allGroups[0].id : null);
+        
+        if (!groupId) {
+            showNotification(`⚠️ No group selected. Please select a group first.`, 'warning');
+            return;
+        }
+        
+        console.log(`[MISSING ORDER RECOVERY] 🔄 Triggering recovery for group ${groupId}`);
+        showNotification(`🔄 Scanning WhatsApp history for missing orders...`, 'info');
+        
+        const response = await fetch(`/api/recover-missing-orders/${groupId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log(`✅ Missing order recovery triggered`);
+            console.log(`[MISSING ORDER RECOVERY] 📊 Recovered ${data.recoveredCount} orders`);
+            
+            if (data.recoveredCount > 0) {
+                showNotification(`✅ Found ${data.recoveredCount} missing order(s)!`, 'success');
+                showNotification(`📌 Orders added as "Processing" - will auto-approve in 2 minutes`, 'info');
+                
+                // Refresh orders to show recovered ones
+                setTimeout(async () => {
+                    await loadOrdersNew();
+                }, 1500);
+            } else {
+                showNotification(`✅ No missing orders found. All orders are up to date.`, 'success');
+            }
+        } else {
+            showNotification(`❌ Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error recovering missing orders:', error);
+        showNotification(`❌ Error: ${error.message}`, 'error');
     }
 }
 
@@ -3787,12 +3950,15 @@ function displayAllOrdersPage(page) {
         const statusColor = statusColors[order.status] || '#4facfe';
         const statusBgColor = statusBg[order.status] || '#4facfe33';
 
+        // 🎮 DISPLAY PLAYER ID: Use playerIdNumber, playerId, or fallback
+        const displayPlayerId = (order.playerIdNumber || order.playerId || order.userPhone || order.userId || 'N/A').toString().split('\n')[0];
+
         return `
             <tr>
                 <td><strong>#${order.id}</strong></td>
                 <td><span style="background: rgba(102, 126, 234, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">${order.groupName || order.groupId}</span></td>
                 <td>${order.userName || order.userId}</td>
-                <td>${(order.playerIdNumber || order.userPhone || order.playerId || order.phone || 'N/A').split('\n')[0]}</td>
+                <td><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${displayPlayerId}</span></td>
                 <td><strong>${order.diamonds} 💎</strong></td>
                 <td>৳${(order.amount || Math.round(order.diamonds * (order.rate || 2.13))).toLocaleString()}</td>
                 <td>
@@ -5692,6 +5858,8 @@ function showDueReminderModal() {
                         <h4 style="margin: 0 0 8px 0; color: #4facfe; font-size: clamp(0.9rem, 3.5vw, 1.1rem);">📝 Message Preview:</h4>
                         <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-size: clamp(0.7rem, 2.8vw, 0.85rem); color: #bbb; font-family: monospace; line-height: 1.5; white-space: pre-wrap; overflow-x: auto;">
 🔔 *দয়া করে মনোযোগ দিন* 🔔
+
+📅 *তারিখ:* [Date]
 
 [Group Name] গ্রুপের জন্য বকেয়া টাকা পরিশোধের অনুরোধ।
 

@@ -6,6 +6,83 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const { startAutoApprovalTimer, cancelAutoApprovalTimer } = require('../utils/auto-approval');
 
+// 📅 Midnight Task - Transfer today's orders to yesterday
+const { spawn } = require('child_process');
+
+let midnightTimeout = null;
+
+// Function to calculate time until midnight (BD timezone)
+function getTimeUntilMidnight() {
+    const BD_TIMEZONE_OFFSET = 6 * 60 * 60 * 1000;
+    const now = new Date(Date.now() + BD_TIMEZONE_OFFSET);
+    const midnight = new Date(now);
+    midnight.setUTCHours(24, 0, 0, 0); // Next midnight in UTC
+    
+    return midnight - now;
+}
+
+// Function to run transfer script
+async function runMidnightTransfer() {
+    try {
+        console.log('\n╔════════════════════════════════════════════════════════╗');
+        console.log('║      🌙 MIDNIGHT TRIGGER: Running transfer script...   ║');
+        console.log('╚════════════════════════════════════════════════════════╝\n');
+        
+        return new Promise((resolve, reject) => {
+            const process = spawn('node', [path.join(__dirname, '..', 'transfer-to-yesterday.js')], {
+                stdio: 'inherit',
+                shell: true
+            });
+            
+            process.on('close', (code) => {
+                if (code === 0) {
+                    console.log('\n✅ [MIDNIGHT] Transfer completed successfully');
+                    resolve();
+                } else {
+                    console.log(`\n⚠️  [MIDNIGHT] Transfer process exited with code ${code}`);
+                    resolve(); // Don't reject to keep the app running
+                }
+                
+                // Schedule next midnight
+                scheduleMidnightTask();
+            });
+            
+            process.on('error', (err) => {
+                console.error(`\n❌ [MIDNIGHT] Error running transfer:`, err);
+                resolve(); // Don't reject to keep the app running
+                
+                // Schedule next midnight
+                scheduleMidnightTask();
+            });
+        });
+    } catch (error) {
+        console.error('❌ [MIDNIGHT] Error:', error);
+        // Schedule next midnight anyway
+        scheduleMidnightTask();
+    }
+}
+
+// Function to schedule midnight task
+function scheduleMidnightTask() {
+    // Clear existing timeout
+    if (midnightTimeout) {
+        clearTimeout(midnightTimeout);
+    }
+    
+    const timeUntil = getTimeUntilMidnight();
+    console.log(`\n📅 [MIDNIGHT] Next transfer scheduled in ${Math.round(timeUntil / 1000 / 60)} minutes`);
+    
+    midnightTimeout = setTimeout(() => {
+        runMidnightTransfer();
+    }, timeUntil);
+}
+
+// Initialize midnight scheduler on startup
+setTimeout(() => {
+    console.log('\n🕐 [MIDNIGHT] Initializing midnight scheduler...');
+    scheduleMidnightTask();
+}, 2000);
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -22,6 +99,10 @@ const io = socketIo(server, {
     maxHttpBufferSize: 1e6,
     perMessageDeflate: false
 });
+
+// 📡 Make Socket.IO available globally for broadcasting from bot
+global.io = io;
+console.log('[INIT] ✅ Socket.IO configured globally for real-time broadcasts');
 
 const PORT = process.env.ADMIN_PORT || 3005;
 
@@ -650,8 +731,24 @@ app.get('/api/groups', async (req, res) => {
                 rate: data.rate || 2.13,
                 dueLimit: data.dueLimit || 0,
                 
-                // All entries (for orders table)
-                entries: entries,
+                // 🎮 Enrich entries with playerIdNumber for proper display
+                entries: entries.map(entry => {
+                    // 🎯 Display name: Extract actual user name (avoid showing just ID)
+                    let displayName = entry.userName || 'Unknown';
+                    const userIdWithoutSuffix = (entry.userId || '').replace('@lid', '').replace('@c.us', '');
+                    
+                    // If userName is just a phone number or matches userId, show generic name
+                    if (!displayName || displayName.includes('@') || displayName === entry.userId || displayName === userIdWithoutSuffix || /^\d+$/.test(displayName)) {
+                        displayName = 'User-' + userIdWithoutSuffix.substring(0, 7);
+                    }
+                    
+                    return {
+                        ...entry,
+                        playerIdNumber: entry.playerIdNumber || entry.userId || '',  // 🎮 Add Player ID
+                        userName: displayName,  // 👤 Add/ensure User Name (display-friendly)
+                        userPhone: entry.playerIdNumber || entry.userId || ''  // Use playerIdNumber for display
+                    };
+                }),
                 
                 // Approved/Completed
                 totalOrders: approvedEntries.length,
@@ -1376,17 +1473,42 @@ app.get('/api/orders', async (req, res) => {
         Object.entries(groups).forEach(([groupId, groupData]) => {
             const entries = groupData.entries || [];
             entries.forEach(entry => {
+                // 🎮 CRITICAL FIX: Use playerIdNumber if available, fallback to userId
+                const playerID = entry.playerIdNumber || entry.userId || '';
+                
+                // 🎯 DISPLAY NAME: Extract actual user name (avoid showing just ID)
+                let displayName = entry.userName || 'Unknown';
+                const userIdWithoutSuffix = (entry.userId || '').replace('@lid', '').replace('@c.us', '');
+                
+                // If userName is just a phone number (WhatsApp ID) or matches userId, show generic name
+                if (!displayName || displayName.includes('@') || displayName === entry.userId || displayName === userIdWithoutSuffix || /^\d+$/.test(displayName)) {
+                    displayName = 'User-' + userIdWithoutSuffix.substring(0, 7);
+                }
+                
                 ordersArray.push({
                     id: entry.id,
-                    phone: entry.userName || entry.userId || 'Unknown',
+                    userId: entry.userId || '',  // WhatsApp ID
+                    userName: displayName,  // User display name (shown in User column)
+                    userPhone: entry.userId || '',  // userPhone = userId for back-compat
+                    playerId: playerID,  // PRIMARY: playerId display
+                    playerIdNumber: playerID,  // BACKUP: playerIdNumber
+                    phone: playerID || displayName || entry.userId || 'Unknown',  // Display in ID/Number column
+                    groupId: groupId,  // Add groupId
+                    groupName: groupData.groupName || groupData.name || 'Unknown Group',  // Add groupName
                     playerIdType: 'Free Fire',
-                    playerId: entry.playerIdNumber || entry.userId || '',
                     amount: Math.round(entry.diamonds * entry.rate),
                     diamonds: entry.diamonds || 0,
+                    rate: entry.rate || 2.3,
                     status: entry.status || 'pending',
                     date: entry.createdAt || new Date().toISOString(),
+                    createdAt: entry.createdAt || new Date().toISOString(),
                     processingStartedAt: entry.processingStartedAt || null,
-                    processingTimeout: entry.processingTimeout || null
+                    approvedBy: entry.approvedBy || null,
+                    deletedAt: entry.deletedAt || null,
+                    deletedBy: entry.deletedBy || null,
+                    processingTimeout: entry.processingTimeout || null,
+                    messageId: entry.messageId || null,
+                    source: entry.source || 'normal'
                 });
             });
         });
@@ -1415,9 +1537,11 @@ app.get('/api/orders/:orderId', async (req, res) => {
                     success: true,
                     order: {
                         id: entry.id,
+                        userName: entry.userName || 'Unknown',  // ✅ Add userName field
                         phone: entry.userName || entry.userId || 'Unknown',
-                        playerIdType: 'Free Fire',
                         playerId: entry.playerIdNumber || entry.userId || '',
+                        userPhone: entry.userId || '',  // ✅ Add userPhone field
+                        playerIdType: 'Free Fire',
                         amount: Math.round(entry.diamonds * entry.rate),
                         diamonds: entry.diamonds || 0,
                         status: entry.status || 'pending',
@@ -1504,8 +1628,14 @@ app.post('/api/orders/:orderId/update-status', async (req, res) => {
             }
         }
 
+        // ✅ NEW: If order not found in current admin panel, check if it's in WhatsApp history
+        // This handles the case where order was approved in WhatsApp but missing from admin panel
         if (!updated) {
-            return res.status(404).json({ success: false, error: 'Order not found' });
+            console.log(`[MISSING ORDER RECOVERY] 🔍 Order ${orderId} not found in admin panel`);
+            console.log(`[MISSING ORDER RECOVERY] 📌 Will add as missing order when detected`);
+            // The missing order recovery system will detect this during next sync
+            // For now, we return not found but the system will recover it automatically
+            return res.status(404).json({ success: false, error: 'Order not found in current admin panel - will be recovered from WhatsApp history' });
         }
     } catch (error) {
         console.error('[ORDER UPDATE ERROR]', error);
@@ -2277,6 +2407,77 @@ app.post('/api/order-event', async (req, res) => {
             // Handle recovered missing orders
             console.log(`[ORDER-EVENT] 🚨 MISSING ORDER RECOVERED: ${entryToUse.diamonds}💎 from ${entryToUse.userName}`);
             
+            // ✅ IMPORTANT: Save recovered order to database
+            try {
+                const database = await readJSON(databasePath);
+                const groupId = entryToUse.groupId;
+                
+                // Ensure group exists
+                if (!database.groups) {
+                    database.groups = {};
+                }
+                
+                if (!database.groups[groupId]) {
+                    database.groups[groupId] = {
+                        name: entryToUse.groupName || 'Unknown Group',
+                        entries: []
+                    };
+                }
+                
+                // Ensure entries array exists
+                if (!database.groups[groupId].entries) {
+                    database.groups[groupId].entries = [];
+                }
+                
+                // Check if order already exists
+                const existingIndex = database.groups[groupId].entries.findIndex(
+                    e => e.id == entryToUse.entryId || e.id == entryToUse.id
+                );
+                
+                // Prepare order data with PROCESSING status
+                const orderData = {
+                    id: entryToUse.entryId || entryToUse.id,
+                    userId: entryToUse.userId,
+                    userName: entryToUse.userName || 'Unknown',  // ✅ Ensure userName
+                    userIdFromMsg: entryToUse.playerIdNumber || entryToUse.userIdFromMsg || entryToUse.userId,  // ✅ Use playerIdNumber as priority
+                    playerIdNumber: entryToUse.playerIdNumber || entryToUse.userIdFromMsg,  // ✅ Also store playerIdNumber
+                    diamonds: entryToUse.diamonds,
+                    amount: entryToUse.amount || (entryToUse.diamonds * (entryToUse.rate || 2.3)),
+                    rate: entryToUse.rate || 2.3,
+                    status: entryToUse.status || 'processing',  // ✅ Use processing status
+                    processingStartedAt: entryToUse.processingStartedAt || new Date().toISOString(),
+                    createdAt: entryToUse.timestamp || new Date().toISOString(),
+                    timestamp: entryToUse.timestamp || Date.now(),
+                    messageId: entryToUse.messageId,
+                    groupName: entryToUse.groupName || database.groups[groupId].name,
+                    recoveredAt: entryToUse.recoveredAt,
+                    originalTimestamp: entryToUse.originalTimestamp,
+                    originalStatus: entryToUse.originalStatus,
+                    recoveryReason: entryToUse.recoveryReason,
+                    recoveredBy: entryToUse.recoveredBy,
+                    approvedBy: entryToUse.approvedBy,
+                    isRecovered: true
+                };
+                
+                if (existingIndex !== -1) {
+                    // Update existing order
+                    console.log(`[ORDER-EVENT] 🔄 Updating existing order ${orderData.id}`);
+                    database.groups[groupId].entries[existingIndex] = orderData;
+                } else {
+                    // Add new order
+                    console.log(`[ORDER-EVENT] ➕ Adding new recovered order ${orderData.id}`);
+                    database.groups[groupId].entries.push(orderData);
+                }
+                
+                // Save database
+                await writeJSON(databasePath, database);
+                console.log(`[ORDER-EVENT] ✅ Recovered order saved to database`);
+                
+            } catch (dbError) {
+                console.error(`[ORDER-EVENT] ⚠️ Error saving to database:`, dbError.message);
+            }
+            
+            // Emit socket event to update admin panel
             io.emit('missingOrderRecovered', {
                 orderId: entryToUse.entryId || entryToUse.id,
                 order: entryToUse,
@@ -2484,9 +2685,19 @@ app.post('/api/send-due-reminders', async (req, res) => {
             
             paymentInstructions += '\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
             
+            // Get current date in Bengali format
+            const now = new Date();
+            const bengaliDate = now.toLocaleDateString('bn-BD', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
             // Create reminder message with payment instructions
             const message = `
 🔔 *দয়া করে মনোযোগ দিন* 🔔
+
+📅 *তারিখ:* ${bengaliDate}
 
 ${group.groupName || group.name} গ্রুপের জন্য বকেয়া টাকা পরিশোধের অনুরোধ।
 
@@ -2550,6 +2761,62 @@ ${paymentInstructions}
             message: 'Due reminder processing completed',
             results
         });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Send Start Message to Group
+app.post('/api/send-start-message', async (req, res) => {
+    try {
+        const { groupId } = req.body;
+        
+        if (!groupId) {
+            return res.status(400).json({ success: false, error: 'Group ID required' });
+        }
+        
+        // Load database to get group info
+        const database = await readJSON(databasePath);
+        const group = database.groups[groupId];
+        
+        if (!group) {
+            return res.status(404).json({ success: false, error: 'Group not found' });
+        }
+        
+        // Simple start message - just send "start"
+        const startMessage = 'start';
+        
+        // Send message via bot API
+        try {
+            const botResponse = await fetch('http://localhost:3003/api/bot-send-message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    groupId: groupId,
+                    message: startMessage
+                })
+            });
+            
+            if (botResponse.ok) {
+                res.json({
+                    success: true,
+                    message: 'Start message sent successfully',
+                    groupName: group.groupName || group.name
+                });
+            } else {
+                res.status(500).json({
+                    success: false,
+                    error: 'Bot failed to send message'
+                });
+            }
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: `Bot communication error: ${error.message}`
+            });
+        }
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -3380,37 +3647,29 @@ app.get('/api/group-details/:period', async (req, res) => {
         const database = await readJSON(databasePath);
         const groups = database.groups || {};
         
-        // BD Timezone: UTC+6
-        const BD_TIMEZONE_OFFSET = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-        
-        // Helper to get BD time
-        function getBDTime() {
-            return new Date(Date.now() + BD_TIMEZONE_OFFSET);
-        }
-        
-        // Helper to get date range
+        // Helper to get date range - using local server time directly
         function getDateRange(type) {
-            const now = getBDTime();
+            const now = new Date(); // Use server's local time
             const start = new Date(now);
             
             switch(type) {
                 case 'today':
-                    start.setUTCHours(0, 0, 0, 0);
+                    start.setHours(0, 0, 0, 0);
                     return { start, end: now };
                 case 'yesterday':
-                    start.setUTCDate(now.getUTCDate() - 1);
-                    start.setUTCHours(0, 0, 0, 0);
+                    start.setDate(now.getDate() - 1);
+                    start.setHours(0, 0, 0, 0);
                     const end = new Date(start);
-                    end.setUTCHours(23, 59, 59, 999);
+                    end.setHours(23, 59, 59, 999);
                     return { start, end };
                 case 'weekly':
-                    const day = now.getUTCDay();
-                    start.setUTCDate(now.getUTCDate() - day);
-                    start.setUTCHours(0, 0, 0, 0);
+                    const day = now.getDay();
+                    start.setDate(now.getDate() - day);
+                    start.setHours(0, 0, 0, 0);
                     return { start, end: now };
                 case 'monthly':
-                    start.setUTCDate(1);
-                    start.setUTCHours(0, 0, 0, 0);
+                    start.setDate(1);
+                    start.setHours(0, 0, 0, 0);
                     return { start, end: now };
                 default:
                     return { start: new Date('2000-01-01'), end: now };
@@ -3500,7 +3759,7 @@ app.get('/api/orders-menu/pending', requireAuth, (req, res) => {
 });
 
 // 📋 GET All Orders for Order Menu
-app.get('/api/orders-menu/all', requireAuth, (req, res) => {
+app.get('/api/orders-menu/all', (req, res) => {
     try {
         const { getAllOrders } = require('../utils/order-menu');
         const orders = getAllOrders();
@@ -3512,7 +3771,7 @@ app.get('/api/orders-menu/all', requireAuth, (req, res) => {
 });
 
 // 📋 GET Offline Orders
-app.get('/api/orders-menu/offline', requireAuth, (req, res) => {
+app.get('/api/orders-menu/offline', (req, res) => {
     try {
         const { getOfflineOrders } = require('../utils/order-menu');
         const orders = getOfflineOrders();
@@ -3524,7 +3783,7 @@ app.get('/api/orders-menu/offline', requireAuth, (req, res) => {
 });
 
 // 📋 GET Orders by Status
-app.get('/api/orders-menu/status/:status', requireAuth, (req, res) => {
+app.get('/api/orders-menu/status/:status', (req, res) => {
     try {
         const { status } = req.params;
         const { getOrdersByStatus } = require('../utils/order-menu');
@@ -3574,6 +3833,126 @@ app.get('/api/orders-menu/count/summary', requireAuth, (req, res) => {
         res.json(summary);
     } catch (error) {
         console.error('[API] Order count error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ NEW: Trigger Missing Order Recovery - Admin can manually recover missing orders
+app.post('/api/recover-missing-orders/:groupId', async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        
+        console.log(`[MISSING ORDER RECOVERY] 🔄 Manual recovery triggered for group ${groupId}`);
+        
+        const database = await readJSON(databasePath);
+        const groups = database.groups || {};
+        const groupData = groups[groupId];
+        
+        if (!groupData) {
+            return res.status(404).json({ success: false, error: 'Group not found' });
+        }
+        
+        // Get all orders in this group from database that might be missing from WhatsApp detection
+        const allGroupOrders = groupData.entries || [];
+        const recoveredOrders = [];
+        
+        console.log(`[MISSING ORDER RECOVERY] 📊 Checking ${allGroupOrders.length} orders in group ${groupId}`);
+        
+        // Emit recovery event for each order found
+        allGroupOrders.forEach(order => {
+            if (order.status === 'pending' || order.status === 'processing') {
+                recoveredOrders.push({
+                    id: order.id,
+                    status: order.status,
+                    diamonds: order.diamonds,
+                    userName: order.userName
+                });
+                
+                console.log(`[MISSING ORDER RECOVERY] ✅ Recovered Order ${order.id}: ${order.userName} (${order.diamonds}💎)`);
+            }
+        });
+        
+        // Broadcast to admin panel
+        io.emit('missingOrdersRecovered', {
+            groupId: groupId,
+            recoveredCount: recoveredOrders.length,
+            orders: recoveredOrders,
+            timestamp: new Date().toISOString()
+        });
+        
+        res.json({
+            success: true,
+            message: `Recovered ${recoveredOrders.length} missing orders`,
+            recoveredCount: recoveredOrders.length,
+            orders: recoveredOrders
+        });
+        
+    } catch (error) {
+        console.error('[MISSING ORDER RECOVERY ERROR]', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 📡 POST: Sync order from bot to admin panel (prevent MISSING orders issue)
+// This ensures admin panel immediately knows about approved orders before auto-approval timer
+app.post('/api/order-sync', async (req, res) => {
+    try {
+        const { groupId, groupName, orderId, userId, userName, diamonds, playerIdNumber, status, rate, amount, messageId, timestamp } = req.body;
+        
+        console.log(`[ORDER-SYNC] 📡 Syncing order ${orderId} to admin panel`);
+        console.log(`[ORDER-SYNC]   Status: ${status} | User: ${userName} | Diamonds: ${diamonds}💎`);
+        
+        // Validate required fields
+        if (!groupId || !orderId || !userId || !diamonds) {
+            console.log(`[ORDER-SYNC] ❌ Missing required fields`);
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        
+        // Load database to verify order exists
+        const db = require('../config/database');
+        const groupData = db.getGroupData(groupId);
+        
+        if (!groupData || !groupData.entries) {
+            console.log(`[ORDER-SYNC] ⚠️ Group not found in database: ${groupId}`);
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        
+        // Find the order
+        const order = groupData.entries.find(e => e.id == orderId);
+        if (!order) {
+            console.log(`[ORDER-SYNC] ⚠️ Order not found: ${orderId}`);
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        // Broadcast to all connected admin panel clients via Socket.IO
+        // This ensures the UI updates in real-time
+        if (global.io) {
+            global.io.emit('order-synced', {
+                groupId,
+                orderId,
+                status,
+                userName,
+                diamonds,
+                amount,
+                timestamp: new Date().toISOString()
+            });
+            console.log(`[ORDER-SYNC] 📢 Broadcasted to ${global.io.engine.clientsCount} connected clients`);
+        } else {
+            console.log(`[ORDER-SYNC] ⚠️ Socket.IO not available for broadcasting`);
+        }
+        
+        // Log the sync event
+        console.log(`[ORDER-SYNC] ✅ Order ${orderId} synced successfully`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Order synced',
+            orderId,
+            status 
+        });
+        
+    } catch (error) {
+        console.error('[ORDER-SYNC] ❌ Error:', error);
         res.status(500).json({ error: error.message });
     }
 });

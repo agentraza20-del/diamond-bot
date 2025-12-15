@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Diamond Bot - Admin Panel</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css?v=2025-12-15-fixes">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -312,6 +312,9 @@
                         <button class="btn-secondary btn-calculate" onclick="calculateSelectedDiamonds()">
                             <i class="fas fa-calculator"></i> Calculate Total
                         </button>
+                        <button class="btn-primary" onclick="startSelectedGroups()" style="background: linear-gradient(135deg, #43e97b 0%, #38ada9 100%);">
+                            <i class="fas fa-rocket"></i> Start Selected
+                        </button>
                     </div>
                     
                     <div class="calculation-result" id="calculationResult" style="display: none;">
@@ -403,9 +406,14 @@
         <div class="view" id="ordersView">
             <div class="view-header">
                 <h1><i class="fas fa-shopping-cart"></i> Orders</h1>
-                <button class="btn-refresh" onclick="refreshData()">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-refresh" onclick="refreshData()" title="Refresh Orders">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button class="btn-refresh" onclick="recoverMissingOrders()" title="Recover Missing Orders from WhatsApp" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <i class="fas fa-search-plus"></i> Recover Missing
+                    </button>
+                </div>
             </div>
 
             <div class="search-bar">
@@ -438,7 +446,7 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>Phone</th>
+                            <th>User</th>
                             <th>ID/Number</th>
                             <th>Diamonds</th>
                             <th>Amount</th>
@@ -460,7 +468,7 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>Phone</th>
+                            <th>User</th>
                             <th>ID/Number</th>
                             <th>Diamonds</th>
                             <th>Amount</th>
@@ -482,7 +490,7 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>Phone</th>
+                            <th>User</th>
                             <th>ID/Number</th>
                             <th>Diamonds</th>
                             <th>Amount</th>
@@ -504,7 +512,7 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>Phone</th>
+                            <th>User</th>
                             <th>ID/Number</th>
                             <th>Diamonds</th>
                             <th>Amount</th>
@@ -526,7 +534,7 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>Phone</th>
+                            <th>User</th>
                             <th>ID/Number</th>
                             <th>Diamonds</th>
                             <th>Amount</th>
@@ -796,6 +804,6 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/js/app.js"></script>
+    <script src="/js/app.js?v=2025-12-15-fixes"></script>
 </body>
 </html>

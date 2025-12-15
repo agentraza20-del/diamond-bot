@@ -2440,16 +2440,22 @@ async function loadTransactions() {
             return;
         }
 
-        tbody.innerHTML = allTransactions.slice(0, 50).map(t => `
+        tbody.innerHTML = allTransactions.slice(0, 50).map(t => {
+            // ✅ Fix: Convert id to string and handle if it's null/undefined
+            const idStr = (t.id || '').toString().substring(0, 8);
+            const displayId = idStr ? idStr + '...' : 'N/A';
+            
+            return `
             <tr>
-                <td>${t.id.substring(0, 8)}...</td>
+                <td>${displayId}</td>
                 <td><strong>${t.groupName || t.phone || 'Unknown'}</strong></td>
-                <td>৳${t.amount.toLocaleString()}</td>
-                <td>${t.method}</td>
+                <td>৳${(t.amount || 0).toLocaleString()}</td>
+                <td>${t.method || 'Unknown'}</td>
                 <td><span class="status-badge status-${t.status}">${t.status}</span></td>
-                <td>${new Date(t.date).toLocaleString('bn-BD')}</td>
+                <td>${new Date(t.date || Date.now()).toLocaleString('bn-BD')}</td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
 
         // Update recent transactions on dashboard - only manual type
         const recentTbody = document.getElementById('recentTransactions');
@@ -2457,9 +2463,9 @@ async function loadTransactions() {
         recentTbody.innerHTML = manualTransactions.slice(0, 5).map(t => `
             <tr>
                 <td data-label="Group Name">${t.groupName || 'Unknown Group'}</td>
-                <td data-label="Amount">৳${t.amount.toLocaleString()}</td>
-                <td data-label="Type">${t.type}</td>
-                <td data-label="Date">${new Date(t.date).toLocaleDateString('bn-BD')}</td>
+                <td data-label="Amount">৳${(t.amount || 0).toLocaleString()}</td>
+                <td data-label="Type">${t.type || 'manual'}</td>
+                <td data-label="Date">${new Date(t.date || Date.now()).toLocaleDateString('bn-BD')}</td>
             </tr>
         `).join('');
         

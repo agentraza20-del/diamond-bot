@@ -93,15 +93,22 @@ const io = socketIo(server, {
         allowEIO3: true
     },
     transports: ['websocket', 'polling'],
-    pingInterval: 20000,             // Send ping every 20 seconds (reduced from 25)
-    pingTimeout: 45000,              // Wait 45 seconds for pong (reduced from 60)
-    allowUpgrades: true,
-    maxHttpBufferSize: 1e6,
-    perMessageDeflate: false,
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
-    }
+    
+    // ⏱️ HEARTBEAT SETTINGS - Prevent premature disconnects
+    pingInterval: 15000,              // Send ping every 15 seconds (more frequent)
+    pingTimeout: 30000,               // Wait 30 seconds for pong (shorter timeout)
+    
+    // 📊 SESSION & BUFFER SETTINGS
+    allowUpgrades: true,              // Allow websocket upgrade from polling
+    maxHttpBufferSize: 1e6,           // 1MB max buffer
+    perMessageDeflate: false,         // Disable compression for speed
+    
+    // 🔧 POLLING SETTINGS - Fix session expiry
+    maxPollingTransportSessionLength: 300,  // Session timeout in seconds (increased)
+    serveClientVersion: true,         // Serve Socket.IO client version
+    
+    // 🔌 CONNECTION SETTINGS
+    allowEIO3: true                   // Support Engine.IO v3
 });
 
 // 📡 Make Socket.IO available globally for broadcasting from bot

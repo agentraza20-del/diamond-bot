@@ -462,9 +462,12 @@ const socket = io({
     reconnectionAttempts: Infinity, // Try forever
     transports: ['websocket', 'polling'],  // Try websocket first, fallback to polling
     upgrade: true,                   // Allow upgrade from polling to websocket
-    pingInterval: 25000,             // Send ping every 25 seconds
-    pingTimeout: 60000,              // Wait 60 seconds for pong before disconnecting
-    rememberUpgrade: true            // Remember transport preference
+    pingInterval: 15000,             // Send ping every 15 seconds (match server)
+    pingTimeout: 30000,              // Wait 30 seconds for pong (match server)
+    rememberUpgrade: true,           // Remember transport preference
+    path: '/socket.io',              // Standard Socket.IO path
+    forceNew: false,                 // Reuse existing connection
+    autoConnect: true                // Auto connect on creation
 });
 
 // Global State

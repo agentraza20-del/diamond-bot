@@ -6,6 +6,21 @@ const DATABASE_FILE = path.join(CONFIG_DIR, 'database.json');
 const PAYMENTS_FILE = path.join(CONFIG_DIR, 'payments.json');
 const USERS_FILE = path.join(CONFIG_DIR, 'users.json');
 
+// ✅ WRITE QUEUE - Prevent concurrent file write conflicts
+let writeQueue = Promise.resolve();
+let isWriting = false;
+
+// Queue a write operation
+function queueWrite(operation) {
+    writeQueue = writeQueue.then(() => {
+        isWriting = true;
+        return operation().finally(() => {
+            isWriting = false;
+        });
+    });
+    return writeQueue;
+}
+
 // Initialize database file with proper permissions
 function initializeDB() {
     if (!fs.existsSync(DATABASE_FILE)) {
@@ -47,13 +62,35 @@ function loadDatabase() {
 
 // Save database
 function saveDatabase(data) {
-    try {
-        fs.writeFileSync(DATABASE_FILE, JSON.stringify(data, null, 2));
-        return true;
-    } catch (err) {
-        console.error('Error saving database:', err);
-        return false;
-    }
+    return queueWrite(() => {
+        return new Promise((resolve) => {
+            try {
+                // Ensure proper formatting
+                const jsonString = JSON.stringify(data, null, 2);
+                
+                // Write to temp file first
+                const tempFile = DATABASE_FILE + '.tmp';
+                fs.writeFileSync(tempFile, jsonString);
+                
+                // Atomic rename
+                if (process.platform === 'win32') {
+                    // Windows requires removing target first
+                    if (fs.existsSync(DATABASE_FILE)) {
+                        fs.unlinkSync(DATABASE_FILE);
+                    }
+                }
+                fs.renameSync(tempFile, DATABASE_FILE);
+                
+                // Ensure readable permissions
+                fs.chmodSync(DATABASE_FILE, 0o666);
+                
+                resolve(true);
+            } catch (err) {
+                console.error('[DB SAVE] ⚠️ Error saving database:', err.message);
+                resolve(false);
+            }
+        });
+    });
 }
 
 // Load payments
@@ -69,13 +106,28 @@ function loadPayments() {
 
 // Save payments
 function savePayments(data) {
-    try {
-        fs.writeFileSync(PAYMENTS_FILE, JSON.stringify(data, null, 2));
-        return true;
-    } catch (err) {
-        console.error('Error saving payments:', err);
-        return false;
-    }
+    return queueWrite(() => {
+        return new Promise((resolve) => {
+            try {
+                const jsonString = JSON.stringify(data, null, 2);
+                const tempFile = PAYMENTS_FILE + '.tmp';
+                fs.writeFileSync(tempFile, jsonString);
+                
+                if (process.platform === 'win32') {
+                    if (fs.existsSync(PAYMENTS_FILE)) {
+                        fs.unlinkSync(PAYMENTS_FILE);
+                    }
+                }
+                fs.renameSync(tempFile, PAYMENTS_FILE);
+                fs.chmodSync(PAYMENTS_FILE, 0o666);
+                
+                resolve(true);
+            } catch (err) {
+                console.error('[PAYMENTS SAVE] ⚠️ Error:', err.message);
+                resolve(false);
+            }
+        });
+    });
 }
 
 // Load users
@@ -91,13 +143,28 @@ function loadUsers() {
 
 // Save users
 function saveUsers(data) {
-    try {
-        fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
-        return true;
-    } catch (err) {
-        console.error('Error saving users:', err);
-        return false;
-    }
+    return queueWrite(() => {
+        return new Promise((resolve) => {
+            try {
+                const jsonString = JSON.stringify(data, null, 2);
+                const tempFile = USERS_FILE + '.tmp';
+                fs.writeFileSync(tempFile, jsonString);
+                
+                if (process.platform === 'win32') {
+                    if (fs.existsSync(USERS_FILE)) {
+                        fs.unlinkSync(USERS_FILE);
+                    }
+                }
+                fs.renameSync(tempFile, USERS_FILE);
+                fs.chmodSync(USERS_FILE, 0o666);
+                
+                resolve(true);
+            } catch (err) {
+                console.error('[USERS SAVE] ⚠️ Error:', err.message);
+                resolve(false);
+            }
+        });
+    });
 }
 
 // Get user balance

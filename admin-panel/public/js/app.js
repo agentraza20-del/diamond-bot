@@ -2995,25 +2995,16 @@ async function silentRefreshOrders() {
         // Only update if data has changed
         if (JSON.stringify(newOrders) !== JSON.stringify(allOrders)) {
             allOrders = newOrders;
-            console.log('[SILENT REFRESH] Orders updated, rerendering table');
+            console.log('[SILENT REFRESH] Orders updated (rerender disabled to prevent flickering)');
             
+            // ❌ DISABLED: Table rerender causes flickering
             // Update the current page display silently (NO page reload)
-            displayOrdersPage(currentOrderPage);
+            // displayOrdersPage(currentOrderPage);
             
-            // Restore scroll position after DOM update completes
-            // Use requestAnimationFrame twice to ensure all repaints are complete
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // Restore main body scroll
-                    if (bodyScrollY > 0) {
-                        window.scrollTo({top: bodyScrollY, left: 0, behavior: 'auto'});
-                    }
-                    // Restore main content scroll
-                    if (mainContent && mainScrollY > 0) {
-                        mainContent.scrollTop = mainScrollY;
-                    }
-                });
-            });
+            // Note: Real-time updates handled via socket events instead:
+            // - orderStatusUpdated
+            // - newOrderCreated  
+            // - orderDeleted
         }
     } catch (error) {
         console.log('[SILENT REFRESH] Error:', error.message);
@@ -3046,11 +3037,12 @@ function displayOrdersPage(page) {
     const pageOrders = allOrders.slice(start, end);
 
     if (pageOrders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">No orders found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="loading">No orders found</td></tr>';
         return;
     }
 
-    tbody.innerHTML = pageOrders.map(o => {
+    tbody.innerHTML = pageOrders.map((o, index) => {
+        const serialNumber = start + index + 1; // Calculate serial number
         // Format date to English: MM/DD/YYYY, HH:MM:SS AM/PM
         const date = new Date(o.date || o.createdAt);
         const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
@@ -3140,6 +3132,7 @@ function displayOrdersPage(page) {
         
         return `
             <tr>
+                <td data-label="#">${serialNumber}</td>
                 <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
                 <td data-label="User">${o.userName || 'N/A'}</td>
                 <td data-label="ID/Number">${o.playerId || o.playerIdNumber || o.userPhone || o.userId}</td>
@@ -3453,12 +3446,14 @@ function filterOrders() {
     const end = ordersPerPage;
     const pageOrders = filteredOrdersCache.slice(start, end);
 
-    tbody.innerHTML = pageOrders.map(o => {
+    tbody.innerHTML = pageOrders.map((o, index) => {
+        const serialNumber = start + index + 1;
         const date = new Date(o.date);
         const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
         
         return `
             <tr>
+                <td data-label="#">${serialNumber}</td>
                 <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
                 <td data-label="Phone">${o.userName || 'N/A'}</td>
                 <td data-label="ID/Number">${o.playerId}</td>
@@ -3549,12 +3544,13 @@ function displayOrdersByStatus(status) {
     }
 
     if (filteredOrders.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="loading">No ${status === 'all' ? '' : status} orders found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="loading">No ${status === 'all' ? '' : status} orders found</td></tr>`;
         return;
     }
 
     // Render the orders
-    tbody.innerHTML = filteredOrders.map(o => {
+    tbody.innerHTML = filteredOrders.map((o, index) => {
+        const serialNumber = index + 1;
         const date = new Date(o.date);
         const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
 
@@ -3593,6 +3589,7 @@ function displayOrdersByStatus(status) {
         
         return `
             <tr>
+                <td data-label="#">${serialNumber}</td>
                 <td data-label="Order ID"><span style="font-family: monospace; font-size: 0.85em; color: var(--info-color);">${o.id}</span></td>
                 <td data-label="User">${o.userName || 'N/A'}</td>
                 <td data-label="ID/Number">${o.playerId || o.playerIdNumber || o.userPhone || 'N/A'}</td>

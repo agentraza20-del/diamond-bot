@@ -158,94 +158,93 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
                 console.log(`[APPROVAL-RECOVERY] ❌ EXACT MATCH REQUIRED - Fallback disabled to prevent wrong order approval`);
             }
             
-            // STEP 3: If not found in database, try to extract diamonds from quoted message
-            // DISABLED: This creates new orders from quoted text which can have wrong data
-            // if (!latestOrder) {
-            //     console.log(`[APPROVAL-RECOVERY] ⚠️ Order not found in database, trying to extract from quoted message`);
-            //     
-            //     // Parse message to extract diamonds (2nd number if multi-line, or 1st if single)
-            //     // Format: 
-            //     // - Single line: "1000" (just diamonds)
-            //     // - Multi-line: "78278947\n1000" (player ID on line 1, diamonds on line 2)
-            //     const lines = quotedMsgText.split('\n').map(l => l.trim()).filter(l => l);
-            //     let extractedDiamonds = null;
-            //     let extractedPlayerId = null;
-            //     
-            //     if (lines.length >= 2) {
-            //         // Multi-line format: line 1 = player ID, line 2 = diamonds
-            //         const playerIdMatch = lines[0].match(/(\d+)/);
-            //         extractedPlayerId = playerIdMatch ? playerIdMatch[1] : null;
-            //         
-            //         const diamondStr = lines[1].match(/(\d+)/);
-            //         extractedDiamonds = diamondStr ? parseInt(diamondStr[1]) : null;
-            //         
-            //         console.log(`[APPROVAL-RECOVERY] 📋 Multi-line format detected`);
-            //         console.log(`[APPROVAL-RECOVERY]    Line 1 (Player ID): ${lines[0]}`);
-            //         console.log(`[APPROVAL-RECOVERY]    Line 2 (Diamonds): ${lines[1]}`);
-            //     } else if (lines.length === 1) {
-            //         // Single line: extract the number as diamonds
-            //         const diamondStr = lines[0].match(/(\d+)/);
-            //         extractedDiamonds = diamondStr ? parseInt(diamondStr[1]) : null;
-            //         console.log(`[APPROVAL-RECOVERY] 📋 Single-line format detected: ${lines[0]}`);
-            //     }
-            //     
-            //     if (extractedDiamonds) {
-            //         console.log(`[APPROVAL-RECOVERY] 💎 Extracted diamonds: ${extractedDiamonds}`);
-            //         if (extractedPlayerId) {
-            //             console.log(`[APPROVAL-RECOVERY] 👤 Extracted player ID: ${extractedPlayerId}`);
-            //         }
-            //         
-            //         // ✅ Extract proper user name from multiple sources
-            //         let userName = 'Unknown';
-            //         
-            //         // Try to get name from quoted message
-            //         if (quotedMsg._data?.notifyName) {
-            //             userName = quotedMsg._data.notifyName;
-            //             console.log(`[APPROVAL-RECOVERY] 👤 Got name from notifyName: ${userName}`);
-            //         } else if (quotedMsg.author) {
-            //             // Try to extract from author or use phone number
-            //             const phoneMatch = quotedMsg.author.match(/^(\d+)/);
-            //             if (phoneMatch) {
-            //                 userName = phoneMatch[1];
-            //                 console.log(`[APPROVAL-RECOVERY] 👤 Got phone from author: ${userName}`);
-            //             }
-            //         }
-            //         
-            //         // Try to lookup user info from database
-            //         try {
-            //             const db = require('../config/database');
-            //             const database = db.loadDatabase();
-            //             const groupData = database.groups?.[groupId];
-            //             
-            //             if (groupData && groupData.entries) {
-            //                 // Find any previous order from this user to get their name
-            //                 const prevUserOrder = groupData.entries.find(e => e.userId === quotedUserId);
-            //                 if (prevUserOrder && prevUserOrder.userName) {
-            //                     userName = prevUserOrder.userName;
-            //                     console.log(`[APPROVAL-RECOVERY] 👤 Got name from database: ${userName}`);
-            //                 }
-            //             }
-            //         } catch (dbLookupError) {
-            //             console.log(`[APPROVAL-RECOVERY] ⚠️ Could not lookup from database:`, dbLookupError.message);
-            //         }
-            //         
-            //         // Create a temporary order object for recovery
-            //         latestOrder = {
-            //             id: Date.now(),
-            //             userId: quotedUserId,
-            //             userName: userName,  // ✅ Use extracted/lookup userName
-            //             userIdFromMsg: extractedPlayerId || quotedUserId,
-            //             playerIdNumber: extractedPlayerId,
-            //             diamonds: extractedDiamonds,
-            //             messageId: quotedMsg.id._serialized,
-            //             timestamp: Date.now(),
-            //             status: 'pending',
-            //             groupName: 'WhatsApp Group'
-            //         };
-            //         
-            //         console.log(`[APPROVAL-RECOVERY] 🆕 Created temporary order from quoted message (userName: ${userName})`);
-            //     }
-            // }
+            // STEP 3: If not found in database, try to extract diamonds from quoted message (MISSING ORDER RECOVERY)
+            if (!latestOrder) {
+                console.log(`[APPROVAL-RECOVERY] ⚠️ Order not found in database, trying to extract from quoted message`);
+                
+                // Parse message to extract diamonds (2nd number if multi-line, or 1st if single)
+                // Format: 
+                // - Single line: "1000" (just diamonds)
+                // - Multi-line: "78278947\n1000" (player ID on line 1, diamonds on line 2)
+                const lines = quotedMsgText.split('\n').map(l => l.trim()).filter(l => l);
+                let extractedDiamonds = null;
+                let extractedPlayerId = null;
+                
+                if (lines.length >= 2) {
+                    // Multi-line format: line 1 = player ID, line 2 = diamonds
+                    const playerIdMatch = lines[0].match(/(\d+)/);
+                    extractedPlayerId = playerIdMatch ? playerIdMatch[1] : null;
+                    
+                    const diamondStr = lines[1].match(/(\d+)/);
+                    extractedDiamonds = diamondStr ? parseInt(diamondStr[1]) : null;
+                    
+                    console.log(`[APPROVAL-RECOVERY] 📋 Multi-line format detected`);
+                    console.log(`[APPROVAL-RECOVERY]    Line 1 (Player ID): ${lines[0]}`);
+                    console.log(`[APPROVAL-RECOVERY]    Line 2 (Diamonds): ${lines[1]}`);
+                } else if (lines.length === 1) {
+                    // Single line: extract the number as diamonds
+                    const diamondStr = lines[0].match(/(\d+)/);
+                    extractedDiamonds = diamondStr ? parseInt(diamondStr[1]) : null;
+                    console.log(`[APPROVAL-RECOVERY] 📋 Single-line format detected: ${lines[0]}`);
+                }
+                
+                if (extractedDiamonds) {
+                    console.log(`[APPROVAL-RECOVERY] 💎 Extracted diamonds: ${extractedDiamonds}`);
+                    if (extractedPlayerId) {
+                        console.log(`[APPROVAL-RECOVERY] 👤 Extracted player ID: ${extractedPlayerId}`);
+                    }
+                    
+                    // ✅ Extract proper user name from multiple sources
+                    let userName = 'Unknown';
+                    
+                    // Try to get name from quoted message
+                    if (quotedMsg._data?.notifyName) {
+                        userName = quotedMsg._data.notifyName;
+                        console.log(`[APPROVAL-RECOVERY] 👤 Got name from notifyName: ${userName}`);
+                    } else if (quotedMsg.author) {
+                        // Try to extract from author or use phone number
+                        const phoneMatch = quotedMsg.author.match(/^(\d+)/);
+                        if (phoneMatch) {
+                            userName = phoneMatch[1];
+                            console.log(`[APPROVAL-RECOVERY] 👤 Got phone from author: ${userName}`);
+                        }
+                    }
+                    
+                    // Try to lookup user info from database
+                    try {
+                        const db = require('../config/database');
+                        const database = db.loadDatabase();
+                        const groupData = database.groups?.[groupId];
+                        
+                        if (groupData && groupData.entries) {
+                            // Find any previous order from this user to get their name
+                            const prevUserOrder = groupData.entries.find(e => e.userId === quotedUserId);
+                            if (prevUserOrder && prevUserOrder.userName) {
+                                userName = prevUserOrder.userName;
+                                console.log(`[APPROVAL-RECOVERY] 👤 Got name from database: ${userName}`);
+                            }
+                        }
+                    } catch (dbLookupError) {
+                        console.log(`[APPROVAL-RECOVERY] ⚠️ Could not lookup from database:`, dbLookupError.message);
+                    }
+                    
+                    // Create a temporary order object for recovery
+                    latestOrder = {
+                        id: Date.now(),
+                        userId: quotedUserId,
+                        userName: userName,  // ✅ Use extracted/lookup userName
+                        userIdFromMsg: extractedPlayerId || quotedUserId,
+                        playerIdNumber: extractedPlayerId,
+                        diamonds: extractedDiamonds,
+                        messageId: quotedMsg.id._serialized,
+                        timestamp: Date.now(),
+                        status: 'pending',
+                        groupName: 'WhatsApp Group'
+                    };
+                    
+                    console.log(`[APPROVAL-RECOVERY] 🆕 Created temporary order from quoted message (userName: ${userName})`);
+                }
+            }
             
             // STEP 4: If still no order found
             if (!latestOrder) {

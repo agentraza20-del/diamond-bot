@@ -12,6 +12,8 @@ const { showWhatsAppDashboard } = require('./handlers/dashboard');
 const { processPaymentReceipt } = require('./utils/payment-processor');
 const { handleDiamondRequest, handleMultiLineDiamondRequest, approvePendingDiamond, findPendingDiamondByUser, showPendingRequests, cancelDiamondRequest, pendingDiamondRequests } = require('./handlers/diamond-request');
 const { handleDepositRequest, handleDepositApproval, handleBalanceQuery, showPendingDeposits, showDepositStats } = require('./handlers/deposit');
+const { isDuplicateOrder, startAutoDuplicateScan, stopAutoDuplicateScan } = require('./utils/duplicate-detector');
+const { handleAdminApprovalRecovery, startAutoApprovalScan, stopAutoApprovalScan } = require('./handlers/approval-recovery');
 
 // 🛡️ WhatsApp Safety - Message delay helper to prevent ban
 const { delay, replyWithDelay, sendMessageWithDelay, messageCounter } = require('./utils/delay-helper');
@@ -24,6 +26,12 @@ const { startAutoApprovalTimer, cancelAutoApprovalTimer, restoreProcessingTimers
 
 // 🤖 Auto Admin Registration
 const { autoRegisterAdmin, checkAndAutoRegisterAdmin } = require('./utils/auto-admin-register');
+
+// 📨 Quoted Message Parser - Extract details from quoted messages
+const { extractDiamondCount, extractPlayerId, findOrderFromQuotedMessage, syncOrderToAdminPanel, broadcastOrderUpdate } = require('./utils/quoted-message-parser');
+
+// 🔄 Missing Order Recovery - Recover missing orders when admin approves
+const { recoveryMissingOrderWithUserData, enrichOrderWithUserData, findOrderByMessageId, listMissingPendingOrders } = require('./utils/missing-order-recovery');
 
 // Order Reconciliation removed - Using Missing Order Detection instead
 
@@ -199,6 +207,25 @@ client.on('ready', async () => {
     console.log('✅ WhatsApp Bot Ready!');
     console.log('🤖 Bot is now listening for messages...\n');
     
+    // 🤖 Add bot's own number as admin
+    try {
+        const botInfo = client.info;
+        if (botInfo && botInfo.wid && botInfo.wid._serialized) {
+            const botNumber = botInfo.wid._serialized;
+            console.log(`🤖 Bot Number: ${botNumber}`);
+            
+            // Check if bot is already admin
+            if (!db.isAdmin(botNumber)) {
+                db.addAdmin(botNumber, 'Bot (Auto-Admin)', 'auto');
+                console.log('✅ Bot added as admin');
+            } else {
+                console.log('✅ Bot is already admin');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error adding bot as admin:', error.message);
+    }
+    
     // 🤖 Manual Socket.IO connection after bot is ready
     console.log('[SOCKET.IO] 🔌 Connecting to Admin Panel...');
     setTimeout(() => {
@@ -329,10 +356,22 @@ client.on('message', async (msg) => {
                     
                     await fs.writeFile(path.join(__dirname, 'config', 'database.json'), JSON.stringify(database, null, 2));
                     console.log(`[GROUP-AUTO-REGISTER] ✅ Group registered: ${groupName} (${groupId})`);
+                    
+                    // 🤖 AUTO DUPLICATE SCAN: Start auto-scan for this new group
+                    startAutoDuplicateScan(groupId);
+                    
+                    // 🤖 AUTO APPROVAL SCAN: Start auto-approval check for this new group
+                    startAutoApprovalScan(groupId);
                 } else {
                     // Update message count
                     database.groups[groupId].messageCount = (database.groups[groupId].messageCount || 0) + 1;
                     await fs.writeFile(path.join(__dirname, 'config', 'database.json'), JSON.stringify(database, null, 2));
+                    
+                    // 🤖 AUTO DUPLICATE SCAN: Ensure scan is running for this group
+                    startAutoDuplicateScan(groupId);
+                    
+                    // 🤖 AUTO APPROVAL SCAN: Ensure approval scan is running for this group
+                    startAutoApprovalScan(groupId);
                 }
             } catch (regErr) {
                 console.error('[GROUP-AUTO-REGISTER] Error registering group:', regErr.message);
@@ -388,6 +427,17 @@ client.on('message', async (msg) => {
         
         // "Number" command - Show all payment numbers
         const messageBody = msg.body.trim().toLowerCase();
+        
+        // 🤖 APPROVAL MISSING RECOVERY: Check if admin sent "Done", "OK", "Approved" etc.
+        // This handles cases where admin marked order done but admin panel didn't update
+        const adminInfo = await isAdminByAnyVariant(fromUserId);
+        if (adminInfo && isGroup && groupId) {
+            const handled = await handleAdminApprovalRecovery(msg, groupId, fromUserId, adminInfo.name);
+            if (handled) {
+                messageCounter.incrementCounter();
+                return; // Don't process further if approval recovery was triggered
+            }
+        }
         
         if (messageBody === 'number' || messageBody === 'নাম্বার' || messageBody === 'num') {
             try {
@@ -599,8 +649,20 @@ client.on('message', async (msg) => {
                 return; // Silently ignore - wrong number of non-empty lines
             }
             
+            // � Convert Bengali numbers to English
+            const convertBengaliToEnglish = (text) => {
+                if (!text) return text;
+                const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+                const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+                let result = text.toString();
+                for (let i = 0; i < 10; i++) {
+                    result = result.replace(new RegExp(bengaliDigits[i], 'g'), englishDigits[i]);
+                }
+                return result;
+            };
+            
             // 🔴 FLEXIBLE VALIDATION: Line 1 can be pure number OR phone number format (+96871818340)
-            const line1 = lines[0];
+            const line1 = convertBengaliToEnglish(lines[0]); // Convert Bangla to English
             // Accept: "562656528" OR "+96871818340" (with + prefix and digits)
             const line1Match = line1.match(/^\+?(\d+)$/);
             if (!line1Match) {
@@ -609,7 +671,7 @@ client.on('message', async (msg) => {
             }
             
             // 🔴 STRICT VALIDATION: Line 2 must be pure number (no spaces, no text)
-            const line2 = lines[1];
+            const line2 = convertBengaliToEnglish(lines[1]); // Convert Bangla to English
             const line2Match = line2.match(/^(\d+)$/);
             if (!line2Match) {
                 console.log(`[MULTI-LINE] ❌ REJECTED - Line 2 invalid: "${line2}" (must be pure number)`);
@@ -1001,207 +1063,177 @@ client.on('message', async (msg) => {
             console.log(`[APPROVAL DEBUG] Quoted message ID: ${quotedMessageId}`);
             console.log(`[APPROVAL DEBUG] Pending requests:`, Object.keys(pendingDiamondRequests).length);
             
-            // 🎯 Extract quoted message details
+            // 🎯 UPGRADED: Use new quoted message parser
             const quotedBody = quotedMsg.body || '';
-            console.log(`[APPROVAL DEBUG] Quoted message body (first 100 chars): "${quotedBody.substring(0, 100)}..."`);
+            console.log(`[APPROVAL] Quoted message body (first 100 chars): "${quotedBody.substring(0, 100)}..."`);
             
-            // Try to extract Order ID from message text (format: "Order ID: 1234567890")
-            let quotedOrderId = null;
-            const orderIdMatch = quotedBody.match(/Order ID:\s*(\d+)/i);
-            if (orderIdMatch) {
-                quotedOrderId = parseInt(orderIdMatch[1]);
-                console.log(`[APPROVAL DEBUG] 🎯 Extracted Order ID from text: ${quotedOrderId}`);
+            // 📨 NEW PARSER: Find order from quoted message using aggressive extraction
+            const foundOrder = findOrderFromQuotedMessage(groupId, quotedUserId, quotedBody, quotedMessageId);
+            
+            if (foundOrder) {
+                console.log(`[APPROVAL] ✅ Found pending order from quoted message: Order ${foundOrder.id} (${foundOrder.diamonds}💎)`);
+                
+                // 👤 Get user's name instead of just ID
+                let userDisplayName = foundOrder.userName || quotedUserId;
+                try {
+                    const contact = await client.getContactById(quotedUserId);
+                    if (contact && contact.pushname) {
+                        userDisplayName = contact.pushname;
+                        console.log(`[APPROVAL] 👤 User name from contact: ${userDisplayName}`);
+                    }
+                } catch (err) {
+                    console.log(`[APPROVAL] ⚠️ Could not fetch user name, using: ${userDisplayName}`);
+                }
+                
+                // 🎮 Extract player ID from quoted message
+                const playerIdFromQuote = extractPlayerId(quotedBody);
+                console.log(`[APPROVAL] 🎮 Extracted Player ID: ${playerIdFromQuote || 'N/A'}`);
+                
+                // Update order with extracted player ID if found
+                if (playerIdFromQuote && !foundOrder.playerIdNumber) {
+                    foundOrder.playerIdNumber = playerIdFromQuote;
+                    console.log(`[APPROVAL] ✅ Updated order with Player ID: ${playerIdFromQuote}`);
+                }
+                
+                // Get admin name
+                const adminName = adminInfo ? adminInfo.name : 'Admin';
+                
+                // Change status to 'processing'
+                db.setEntryProcessing(groupId, foundOrder.id, adminName);
+                console.log(`[APPROVAL] ⏳ Order set to PROCESSING status`);
+                
+                // 📡 CRITICAL FIX: Sync to admin panel IMMEDIATELY
+                const syncSuccess = await syncOrderToAdminPanel(groupId, foundOrder, 'processing');
+                if (!syncSuccess) {
+                    console.log(`[APPROVAL] ⚠️ Admin panel sync failed - but order is still in database`);
+                }
+                
+                // 🔔 Broadcast update
+                broadcastOrderUpdate(foundOrder.id, 'processing', `⏳ Order being processed: ${foundOrder.diamonds}💎 from ${userDisplayName}`);
+                
+                // Send approval message with all details
+                const diamondStatus = require('./config/database').getDiamondStatus?.() || JSON.parse(require('fs').readFileSync(require('path').join(__dirname, './config/diamond-status.json'), 'utf8'));
+                const approveMessageEnabled = diamondStatus.approveMessageEnabled !== false;
+                
+                if (approveMessageEnabled) {
+                    const approvalMsg = `✅ *Order Approved - Processing*\n\n` +
+                        `👤 User: ${userDisplayName}\n` +
+                        `🎮 Player ID: ${foundOrder.playerIdNumber || 'N/A'}\n` +
+                        `💎 Diamonds: ${foundOrder.diamonds}💎\n` +
+                        `📅 Order ID: ${foundOrder.id}\n\n` +
+                        `⏰ *Auto-Approval in 2 minutes*`;
+                    
+                    await replyWithDelay(msg, approvalMsg);
+                    messageCounter.incrementCounter();
+                }
+                
+                console.log(`[APPROVAL] ✅ Order ${foundOrder.id} - Player: ${foundOrder.playerIdNumber} | User: ${userDisplayName} | Diamonds: ${foundOrder.diamonds}💎 (starting 2-min timer)`);
+                
+                // ⏱️ Start auto-approval timer
+                startAutoApprovalTimer(groupId, foundOrder.id, foundOrder, client);
+                
+                return;
             }
             
-            // First check if it's a pending multi-line diamond request
-            const pendingDiamond = findPendingDiamondByUser(quotedUserId, groupId, quotedBody, quotedOrderId, quotedMessageId);
+            // ❌ If not found, try to recover MISSING orders
+            console.log(`[APPROVAL] ❌ No pending order found using new parser`);
+            console.log(`[APPROVAL] 🔄 Attempting to recover MISSING order with user data...`);
             
-            if (pendingDiamond) {
-                // It's a multi-line request - approve it
-                const { requestId, request } = pendingDiamond;
-                console.log(`[APPROVAL DEBUG] Found pending diamond for ${quotedUserId}`);
-                const approvalResult = await approvePendingDiamond(requestId, groupId);
+            // Try missing order recovery
+            const recoveredOrder = await recoveryMissingOrderWithUserData(groupId, quotedUserId, quotedBody, quotedMessageId, client);
+            
+            if (recoveredOrder) {
+                console.log(`[APPROVAL] ✅ RECOVERED missing order: ${recoveredOrder.id} for user ${recoveredOrder.userDisplayName}`);
                 
-                if (approvalResult) {
-                    // Check if approve message is enabled
-                    const diamondStatus = require('./config/database').getDiamondStatus?.() || JSON.parse(require('fs').readFileSync(require('path').join(__dirname, './config/diamond-status.json'), 'utf8'));
-                    const approveMessageEnabled = diamondStatus.approveMessageEnabled !== false;
-                    
-                    if (approveMessageEnabled) {
-                        await replyWithDelay(msg, approvalResult.message);
-                        messageCounter.incrementCounter();
-                    }
-                    console.log(`[PROCESSING] Multi-line diamond order: ${approvalResult.diamonds}💎 from ${approvalResult.userIdFromMsg} (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
-                    
-                    // 🔄 Broadcast order status update to admin panel in real-time
-                    if (global.broadcastOrderStatusChange) {
-                        global.broadcastOrderStatusChange(
-                            approvalResult.orderId,
-                            'processing',
-                            `⏳ Order processing: ${approvalResult.diamonds}💎 from ${approvalResult.userName}`
-                        );
-                    }
-                    
-                    // Start auto-approval timer - create entry object from approvalResult
-                    const inMemoryEntry = {
-                        id: approvalResult.orderId,
-                        userId: approvalResult.userId,
-                        diamonds: approvalResult.diamonds,
-                        status: 'processing'
-                    };
-                    startAutoApprovalTimer(groupId, inMemoryEntry.id, inMemoryEntry, client);
+                // Get admin name
+                const adminName = adminInfo ? adminInfo.name : 'Admin';
+                
+                // Mark as processing
+                db.setEntryProcessing(groupId, recoveredOrder.id, adminName);
+                console.log(`[APPROVAL] ⏳ Recovered order set to PROCESSING`);
+                
+                // Update with player ID if extracted
+                const playerIdFromQuote = extractPlayerId(quotedBody);
+                if (playerIdFromQuote && !recoveredOrder.playerIdNumber) {
+                    recoveredOrder.playerIdNumber = playerIdFromQuote;
+                    console.log(`[APPROVAL] 🎮 Updated with Player ID: ${playerIdFromQuote}`);
                 }
-                return;
-            } else {
-                console.log(`[APPROVAL DEBUG] No pending diamond found for ${quotedUserId}`);
                 
-                // ✅ NEW: Check if order was already approved by checking message ID in database
-                if (quotedMessageId) {
-                    const groupData = db.getGroupData(groupId);
-                    if (groupData && groupData.entries) {
-                        const existingOrder = groupData.entries.find(e => 
-                            e.messageId === quotedMessageId && 
-                            e.userId === quotedUserId
-                        );
+                // Sync to admin panel
+                const syncSuccess = await syncOrderToAdminPanel(groupId, recoveredOrder, 'processing');
+                if (syncSuccess) {
+                    console.log(`[APPROVAL] 📡 Recovered order synced to admin panel`);
+                } else {
+                    console.log(`[APPROVAL] ⚠️ Sync failed, but order is recovered in database`);
+                }
+                
+                // Broadcast
+                broadcastOrderUpdate(recoveredOrder.id, 'processing', 
+                    `🔄 Recovered & Processing: ${recoveredOrder.diamonds}💎 from ${recoveredOrder.userDisplayName}`);
+                
+                // Send approval message
+                const diamondStatus = require('./config/database').getDiamondStatus?.() || JSON.parse(require('fs').readFileSync(require('path').join(__dirname, './config/diamond-status.json'), 'utf8'));
+                const approveMessageEnabled = diamondStatus.approveMessageEnabled !== false;
+                
+                if (approveMessageEnabled) {
+                    const recoveryMsg = `🔄 *Missing Order RECOVERED & Approved*\n\n` +
+                        `👤 User: ${recoveredOrder.userDisplayName}\n` +
+                        `🎮 Player ID: ${recoveredOrder.playerIdNumber || 'N/A'}\n` +
+                        `💎 Diamonds: ${recoveredOrder.diamonds}💎\n` +
+                        `📅 Order ID: ${recoveredOrder.id}\n\n` +
+                        `⏰ *Auto-Approval in 2 minutes*\n` +
+                        `✅ Order recovered from database`;
+                    
+                    await replyWithDelay(msg, recoveryMsg);
+                    messageCounter.incrementCounter();
+                }
+                
+                console.log(`[APPROVAL] ✅ Recovered Order ${recoveredOrder.id} - User: ${recoveredOrder.userDisplayName} | Diamonds: ${recoveredOrder.diamonds}💎`);
+                
+                // Start timer
+                startAutoApprovalTimer(groupId, recoveredOrder.id, recoveredOrder, client);
+                
+                return;
+            }
+            
+            // ❌ Still not found - check if order was already processed
+            console.log(`[APPROVAL] ❌ Could not recover missing order`);
+            
+            if (quotedMessageId) {
+                const groupData = db.getGroupData(groupId);
+                if (groupData && groupData.entries) {
+                    const processedOrder = groupData.entries.find(e => 
+                        e.messageId === quotedMessageId && 
+                        e.userId === quotedUserId &&
+                        e.status !== 'pending'
+                    );
+                    
+                    if (processedOrder) {
+                        let statusText = '';
+                        let pAdmin = processedOrder.approvedBy || 'Admin';
                         
-                        if (existingOrder && existingOrder.status !== 'pending') {
-                            // Order exists but not pending - it's already been processed
-                            let statusText = '';
-                            let adminName = existingOrder.approvedBy || 'Admin';
-                            
-                            if (existingOrder.status === 'processing') {
-                                statusText = `⏳ *এই অর্ডারটি ইতিমধ্যে ${adminName} দ্বারা Processing শুরু হয়েছে*`;
-                            } else if (existingOrder.status === 'approved') {
-                                statusText = `✅ *এই অর্ডারটি ইতিমধ্যে ${adminName} দ্বারা Approve করা হয়েছে*`;
-                            } else if (existingOrder.status === 'deleted') {
-                                statusText = `🗑️ *এই অর্ডারটি ইতিমধ্যে ${adminName} দ্বারা Delete করা হয়েছে*`;
-                            } else {
-                                statusText = `ℹ️ *এই অর্ডারটি ইতিমধ্যে প্রসেস করা হয়েছে* (Status: ${existingOrder.status})`;
-                            }
-                            
-                            await replyWithDelay(msg, `${statusText}\n\n💎 Diamonds: ${existingOrder.diamonds}💎\n📅 Order ID: ${existingOrder.id}`);
-                            messageCounter.incrementCounter();
-                            console.log(`[APPROVAL] ❌ Order ${existingOrder.id} already ${existingOrder.status} by ${adminName}`);
-                            return;
+                        if (processedOrder.status === 'processing') {
+                            statusText = `⏳ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Processing শুরু হয়েছে*`;
+                        } else if (processedOrder.status === 'approved') {
+                            statusText = `✅ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Approve করা হয়েছে*`;
+                        } else if (processedOrder.status === 'deleted') {
+                            statusText = `🗑️ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Delete করা হয়েছে*`;
+                        } else {
+                            statusText = `ℹ️ *এই অর্ডারটি ইতিমধ্যে প্রসেস করা হয়েছে* (Status: ${processedOrder.status})`;
                         }
+                        
+                        await replyWithDelay(msg, `${statusText}\n\n💎 Diamonds: ${processedOrder.diamonds}💎\n📅 Order ID: ${processedOrder.id}`);
+                        messageCounter.incrementCounter();
+                        console.log(`[APPROVAL] ℹ️ Order ${processedOrder.id} already ${processedOrder.status}`);
+                        return;
                     }
                 }
             }
             
-            // Find and approve entry from database
-            const groupData = db.getGroupData(groupId);
-            
-            // Check if groupData and entries exist
-            if (!groupData || !groupData.entries || groupData.entries.length === 0) {
-                console.log(`[APPROVAL] No entries found in group data for ${groupId}`);
-                return;
-            }
-            
-            // Find all pending orders for this user
-            const userPendingOrders = groupData.entries.filter(e => e.userId === quotedUserId && e.status === 'pending');
-            
-            if (userPendingOrders.length === 0) {
-                console.log(`[APPROVAL] No pending orders found for user ${quotedUserId}`);
-                return;
-            }
-            
-            // 🎯 CRITICAL FIX: Find the EXACT order that was quoted
-            // Extract diamond count from quoted message to identify the right order
-            let pendingEntry = null;
-            
-            // Try to extract diamond count from quoted message (formats: "100💎", "100 💎", "Diamonds: 100💎")
-            const diamondMatch = quotedBody.match(/(\d+)\s*💎/);
-            if (diamondMatch) {
-                const quotedDiamonds = parseInt(diamondMatch[1]);
-                console.log(`[APPROVAL] Extracted ${quotedDiamonds}💎 from quoted message`);
-                
-                // Find order with matching diamond count
-                pendingEntry = userPendingOrders.find(e => e.diamonds === quotedDiamonds);
-                
-                if (!pendingEntry && userPendingOrders.length === 1) {
-                    // Only one pending order, use it
-                    pendingEntry = userPendingOrders[0];
-                    console.log(`[APPROVAL] Only 1 pending order found, using it (ID: ${pendingEntry.id})`);
-                } else if (pendingEntry) {
-                    console.log(`[APPROVAL] Found exact match: ${quotedDiamonds}💎 order (ID: ${pendingEntry.id})`);
-                }
-            }
-            
-            // ⚠️ CRITICAL FIX: Do NOT use fallback - require exact match to prevent duplicate processing
-            if (!pendingEntry) {
-                console.log(`[APPROVAL] ❌ PREVENTED FALLBACK - Could not find exact match for quoted message`);
-                console.log(`[APPROVAL] 💡 TIP: Reply to the specific order message that shows diamond amount (e.g., "50💎")`);
-                await replyWithDelay(msg, '❌ দয়া করে সঠিক অর্ডার মেসেজে Reply করুন যেখানে ডায়মন্ড এমাউন্ট আছে (উদাহরণ: 50💎)');
-                messageCounter.incrementCounter();
-                return;
-            }
-            
-            console.log(`[APPROVAL] Found ${userPendingOrders.length} pending order(s) for user ${quotedUserId}, approving: ${pendingEntry.diamonds}💎 (ID ${pendingEntry.id})`);
-            
-            // Get admin name (reuse adminInfo from above)
-            const adminName = adminInfo ? adminInfo.name : 'Admin';
-            
-            // Change status to 'processing' instead of 'approved'
-            db.setEntryProcessing(groupId, pendingEntry.id, adminName);
-            
-            // Get name from quoted message
-            let userNameForOrder = quotedUserId;
-            try {
-                if (msg.hasQuotedMsg) {
-                    const quotedMsg = await msg.getQuotedMessage();
-                    if (quotedMsg._data && quotedMsg._data.notifyName) {
-                        userNameForOrder = quotedMsg._data.notifyName;
-                        console.log('[APPROVAL] Got name from notifyName:', userNameForOrder);
-                    } else {
-                        // Try from group participants
-                        const chat = await msg.getChat();
-                        if (chat.isGroup) {
-                            const participant = chat.participants.find(p => p.id._serialized === quotedUserId);
-                            if (participant && participant.contact && participant.contact.pushname) {
-                                userNameForOrder = participant.contact.pushname;
-                                console.log('[APPROVAL] Got name from participant:', userNameForOrder);
-                            }
-                        }
-                    }
-                }
-            } catch (contactErr) {
-                console.log('[APPROVAL] Could not fetch name');
-            }
-            console.log('[APPROVAL] Final userName:', userNameForOrder);
-            
-            const totalValue = pendingEntry.diamonds * pendingEntry.rate;
-            
-            const approvalMsg = `⏳ *Diamond Order Processing*\n\n` +
-                `👤 User: ${userNameForOrder}\n` +
-                `💎 Diamonds: ${pendingEntry.diamonds}💎\n` +
-                `💰 Amount Due: ৳${totalValue.toFixed(2)}\n` +
-                `📊 Rate: ৳${pendingEntry.rate.toFixed(2)}/💎\n\n` +
-                `⏱️ Status: Processing (2 min)\n` +
-                `Order ID: ${pendingEntry.id}\n\n` +
-                `✓ Will auto-approve in 2 minutes\n` +
-                `📱 Delete this message to cancel`;
-
-            // Check if approve message is enabled
-            const diamondStatus = require('./config/database').getDiamondStatus?.() || JSON.parse(require('fs').readFileSync(require('path').join(__dirname, './config/diamond-status.json'), 'utf8'));
-            const approveMessageEnabled = diamondStatus.approveMessageEnabled !== false;
-            
-            if (approveMessageEnabled) {
-                await replyWithDelay(msg, approvalMsg);
-                messageCounter.incrementCounter();
-            }
-            console.log(`[PROCESSING] Order ID ${pendingEntry.id}: ${pendingEntry.diamonds}💎 from ${userNameForOrder} - Will auto-approve in 2 minutes (Message ${approveMessageEnabled ? 'sent' : 'silenced'})`);
-            
-            // 🔄 Broadcast order status update to admin panel in real-time
-            if (global.broadcastOrderStatusChange) {
-                global.broadcastOrderStatusChange(
-                    pendingEntry.id,
-                    'processing',
-                    `⏳ Order processing: ${pendingEntry.diamonds}💎 from ${userNameForOrder}`
-                );
-            }
-            
-            // Start auto-approval timer
-            startAutoApprovalTimer(groupId, pendingEntry.id, pendingEntry, client);
+            // ⏹️ If no order found at all
+            await replyWithDelay(msg, `❌ এই মেসেজে কোনো পেন্ডিং অর্ডার পাওয়া যায়নি।\n\n💡 **সঠিক অর্ডার মেসেজে Reply করুন যেখানে ডায়মন্ড এমাউন্ট আছে।**`);
+            messageCounter.incrementCounter();
+            console.log(`[APPROVAL] ❌ Could not find any matching order`);
             
             return;
         }

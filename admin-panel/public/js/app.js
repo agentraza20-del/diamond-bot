@@ -923,23 +923,37 @@ function initSocketListeners() {
         */
     });
     
-    // ✅ NEW: Missing Orders Recovered Event - DISABLED to prevent flickering
+    // ✅ NEW: Missing Order Recovered Event (singular) - Show notification only
+    socket.on('missingOrderRecovered', (data) => {
+        console.log(`[MISSING ORDER RECOVERED] ✨ Order recovered:`, data);
+        
+        if (data && data.order) {
+            // Show notification to user
+            showNotification(`✨ Missing order recovered: ${data.order.diamonds}💎 from ${data.order.userName}. Please refresh to see updates.`, 'success');
+            console.log(`  ✅ Order ${data.order.id}: ${data.order.userName} (${data.order.diamonds}💎)`);
+            
+            // ❌ DON'T auto-reload to prevent flickering
+            // User can refresh manually using the refresh button
+            // loadOrdersNew();
+        }
+    });
+    
+    // ✅ NEW: Missing Orders Recovered Event (plural) - Show notification only
     socket.on('missingOrdersRecovered', (data) => {
-        console.log(`[MISSING ORDERS RECOVERED] ✨ Recovered ${data.recoveredCount} orders (UI update disabled):`, data);
-        // DISABLED: Don't reload orders automatically to prevent flickering
-        // User can refresh manually if needed
-        /*
+        console.log(`[MISSING ORDERS RECOVERED] ✨ Recovered ${data.recoveredCount} orders:`, data);
+        
         if (data.recoveredCount > 0) {
-            showNotification(`✨ ${data.recoveredCount} missing order(s) recovered!`, 'success');
+            // Show notification to user
+            showNotification(`✨ ${data.recoveredCount} missing order(s) recovered! Please refresh to see updates.`, 'success');
             
             data.orders.forEach(order => {
                 console.log(`  ✅ Order ${order.id}: ${order.userName} (${order.diamonds}💎)`);
             });
             
-            // Reload orders to show the recovered ones
-            loadOrdersNew();
+            // ❌ DON'T auto-reload to prevent flickering
+            // User can refresh manually using the refresh button
+            // loadOrdersNew();
         }
-        */
     });
 }
 

@@ -3011,6 +3011,9 @@ async function loadOrdersNew() {
         
         // Render pagination controls
         renderOrdersPagination(allOrders.length);
+        
+        // ✅ Start processing countdown timers
+        startProcessingTimers();
     } catch (error) {
         console.error('Error loading orders:', error);
         // Fallback to regular orders API
@@ -3197,6 +3200,9 @@ function displayOrdersPage(page) {
             </tr>
         `;
     }).join('');
+    
+    // ✅ Restart processing timers after rendering
+    startProcessingTimers();
 }
 
 // Render pagination controls
@@ -7886,3 +7892,60 @@ function syncPendingOrdersOnReconnect() {
     console.log('[RECONNECT] ✅ Sync triggered');
 }
 
+/**
+ * ✅ PROCESSING COUNTDOWN TIMER
+ * Updates countdown for all processing orders every second
+ * 2 minutes countdown → 0, then auto-approves
+ */
+let processingTimerInterval = null;
+
+function startProcessingTimers() {
+    // Clear existing interval if any
+    if (processingTimerInterval) {
+        clearInterval(processingTimerInterval);
+    }
+    
+    // Update every second
+    processingTimerInterval = setInterval(updateProcessingTimers, 1000);
+    
+    // Initial update
+    updateProcessingTimers();
+}
+
+function updateProcessingTimers() {
+    const now = Date.now();
+    const twoMinutes = 2 * 60 * 1000; // 2 minutes in milliseconds
+    
+    // Find all processing status badges
+    document.querySelectorAll('.status-badge.status-processing[data-start-time]').forEach(badge => {
+        const startTime = parseInt(badge.getAttribute('data-start-time'));
+        const elapsed = now - startTime;
+        const remaining = Math.max(0, twoMinutes - elapsed);
+        
+        if (remaining > 0) {
+            // Calculate minutes and seconds
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            
+            // Update text smoothly without flickering
+            const newText = `⏳ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            if (badge.textContent !== newText) {
+                badge.textContent = newText;
+            }
+        } else {
+            // Timer expired - show "Approving..."
+            if (badge.textContent !== '✅ Approving...') {
+                badge.textContent = '✅ Approving...';
+                badge.style.backgroundColor = '#10b981';
+                badge.style.color = 'white';
+            }
+        }
+    });
+}
+
+function stopProcessingTimers() {
+    if (processingTimerInterval) {
+        clearInterval(processingTimerInterval);
+        processingTimerInterval = null;
+    }
+}

@@ -254,7 +254,7 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
             try {
                 const db = require('../config/database');
                 const database = db.loadDatabase();
-                const groupData = database.groups?.[groupId];
+                let groupData = database.groups?.[groupId];
                 
                 // ✅ NEW: Validate groupData before accessing entries
                 if (!groupData) {
@@ -265,22 +265,20 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
                         name: 'WhatsApp Group', 
                         entries: [] 
                     };
+                    groupData = database.groups[groupId];  // ✅ Update reference
                 }
                 
-                if (!groupData?.entries || !Array.isArray(groupData.entries)) {
+                if (!groupData.entries || !Array.isArray(groupData.entries)) {
                     console.log(`[APPROVAL-RECOVERY] ⚠️ Entries array is invalid, initializing...`);
-                    if (groupData) {
-                        groupData.entries = [];
-                    }
+                    groupData.entries = [];
                 }
                 
-                if (groupData && Array.isArray(groupData.entries)) {
-                    // Check if order already exists in bot database
-                    const existingIndex = groupData.entries.findIndex(e => e.id == latestOrder.id);
-                    
-                    if (existingIndex === -1) {
-                        // Order doesn't exist - add it
-                        console.log(`[APPROVAL-RECOVERY] 💾 Saving recovered order to bot database`);
+                // Check if order already exists in bot database
+                const existingIndex = groupData.entries.findIndex(e => e.id == latestOrder.id);
+                
+                if (existingIndex === -1) {
+                    // Order doesn't exist - add it
+                    console.log(`[APPROVAL-RECOVERY] 💾 Saving recovered order to bot database`);
                         
                         const orderToSave = {
                             id: latestOrder.id,
@@ -301,13 +299,12 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
                             isRecovered: true
                         };
                         
-                        groupData.entries.push(orderToSave);
-                        db.saveDatabase();
-                        
-                        console.log(`[APPROVAL-RECOVERY] ✅ Saved to bot database: ${latestOrder.id}`);
-                    } else {
-                        console.log(`[APPROVAL-RECOVERY] ℹ️ Order already exists in bot database`);
-                    }
+                    groupData.entries.push(orderToSave);
+                    db.saveDatabase(database);
+                    
+                    console.log(`[APPROVAL-RECOVERY] ✅ Saved to bot database: ${latestOrder.id}`);
+                } else {
+                    console.log(`[APPROVAL-RECOVERY] ℹ️ Order already exists in bot database`);
                 }
             } catch (dbSaveError) {
                 console.error(`[APPROVAL-RECOVERY] ⚠️ Error saving to bot database:`, dbSaveError.message);

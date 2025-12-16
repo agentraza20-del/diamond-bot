@@ -1237,10 +1237,10 @@ client.on('message', async (msg) => {
                 }
             }
             
-            // ⏹️ If no order found at all
-            await replyWithDelay(msg, `❌ এই মেসেজে কোনো পেন্ডিং অর্ডার পাওয়া যায়নি।\n\n💡 **সঠিক অর্ডার মেসেজে Reply করুন যেখানে ডায়মন্ড এমাউন্ট আছে।**`);
-            messageCounter.incrementCounter();
-            console.log(`[APPROVAL] ❌ Could not find any matching order`);
+            // ⏹️ If no order found at all - Don't send message to avoid group spam
+            // await replyWithDelay(msg, `❌ এই মেসেজে কোনো পেন্ডিং অর্ডার পাওয়া যায়নি।\n\n💡 **সঠিক অর্ডার মেসেজে Reply করুন যেখানে ডায়মন্ড এমাউন্ট আছে।**`);
+            // messageCounter.incrementCounter();
+            console.log(`[APPROVAL] ❌ Could not find any matching order - No message sent to avoid spam`);
             
             return;
         }

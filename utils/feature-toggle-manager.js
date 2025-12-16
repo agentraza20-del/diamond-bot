@@ -63,6 +63,13 @@ class FeatureToggleManager {
   }
 
   /**
+   * Check if missing order recovery is enabled
+   */
+  static isMissingOrderRecoveryEnabled() {
+    return this.isFeatureEnabled('missingOrderRecovery');
+  }
+
+  /**
    * Toggle feature on/off
    */
   static toggleFeature(featureName, enabled, modifiedBy = 'admin') {

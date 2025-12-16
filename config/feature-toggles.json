@@ -23,5 +23,19 @@
     "description": "Admin panel এ order status tracking দেখাবে",
     "lastModified": "2025-12-07T10:30:00Z",
     "modifiedBy": "admin"
+  },
+  "missingOrderRecovery": {
+    "enabled": false,
+    "name": "Missing Order Recovery",
+    "description": "হারিয়ে যাওয়া orders automatically recover করবে (WhatsApp থেকে scan করে)",
+    "layers": {
+      "layer1": "Last 10 WhatsApp messages থেকে",
+      "layer2": "Last 10 Database orders থেকে",
+      "layer3": "Bot start এর পর থেকে শুধু"
+    },
+    "checkFrequency": "Every user message",
+    "lastModified": "2025-12-15T13:09:12.397Z",
+    "modifiedBy": "admin",
+    "enabledAt": "2025-12-15T10:37:00Z"
   }
 }

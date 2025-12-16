@@ -182,3 +182,39 @@
 [2025-12-11T07:50:54.341Z] 🗑️ ALL DATA CLEARED BY ADMIN
 [2025-12-11T07:51:33.468Z] 🔐 Admin logged in
 [2025-12-11T07:56:29.626Z] 📢 Due reminder sent to Test bot | Due: ৳5000
+[2025-12-11T10:05:00.916Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 22900)
+[2025-12-11T10:08:14.235Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 11900)
+[2025-12-11T10:08:29.624Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 9400)
+[2025-12-11T10:09:14.616Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 690033)
+[2025-12-11T10:09:36.021Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 15900)
+[2025-12-11T10:10:15.690Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 11900)
+[2025-12-11T10:13:27.410Z] Updated user: 115930327715989 (Name: manager, Balance: 0, DueBalance: 14900)
+[2025-12-11T10:13:52.962Z] Updated user: 115930327715989 (Name: manager, Balance: 2000, DueBalance: 6900)
+[2025-12-11T10:13:58.289Z] Updated user: 115930327715989 (Name: manager, Balance: 2000, DueBalance: 12900)
+[2025-12-15T05:09:34.490Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T05:09:49.333Z] 🔐 Admin logged in
+[2025-12-15T05:11:39.963Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T05:11:59.893Z] 🔐 Admin logged in
+[2025-12-15T08:40:26.753Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T08:40:41.278Z] 🔐 Admin logged in
+[2025-12-15T09:26:46.919Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T09:27:09.599Z] 🔐 Admin logged in
+[2025-12-15T11:12:11.527Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T11:12:26.251Z] 🔐 Admin logged in
+[2025-12-15T11:25:01.588Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T11:25:13.039Z] 🔐 Admin logged in
+[2025-12-15T13:00:25.879Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T13:03:05.006Z] 🔐 Admin logged in
+[2025-12-15T13:09:28.091Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T13:09:41.500Z] 🔐 Admin logged in
+[2025-12-15T13:34:07.870Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T13:35:02.201Z] 🔐 Admin logged in
+[2025-12-15T13:46:25.288Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T13:46:39.563Z] 🔐 Admin logged in
+[2025-12-15T13:46:50.755Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T13:47:01.890Z] 🔐 Admin logged in
+[2025-12-15T14:02:31.634Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T14:02:45.916Z] 🔐 Admin logged in
+[2025-12-15T14:32:56.646Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-12-15T14:33:07.867Z] 🔐 Admin logged in
+[2025-12-15T14:33:27.106Z] 💎 Admin diamond stock updated to: 519269

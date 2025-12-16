@@ -23,12 +23,15 @@ function getPendingOrders() {
                     allOrders.push({
                         id: entry.id,
                         userId: entry.userId,
-                        userName: entry.userName,
-                        userPhone: entry.userPhone || '', // Include extracted phone number
+                        userName: entry.userName || 'Unknown',  // ✅ Ensure userName is present
+                        userPhone: entry.userId || '',  // ✅ userPhone should be userId
+                        playerId: entry.playerIdNumber || entry.userId || '',  // ✅ Add playerId
                         diamonds: entry.diamonds,
                         rate: entry.rate || 100,
-                        amount: entry.diamonds * (entry.rate || 100),
+                        amount: Math.round(entry.diamonds * (entry.rate || 100)),  // ✅ Proper calculation
                         status: entry.status,
+                        date: entry.createdAt,  // ✅ Use 'date' not 'createdAt'
+                        processingStartedAt: entry.processingStartedAt || null,
                         createdAt: entry.createdAt,
                         groupId: groupId,
                         source: entry.source || 'normal', // 'normal' or 'offline'
@@ -39,7 +42,7 @@ function getPendingOrders() {
         }
 
         // Sort by creation time (newest first)
-        allOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        allOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         return allOrders;
     } catch (error) {
@@ -66,24 +69,30 @@ function getAllOrders() {
                 allOrders.push({
                     id: entry.id,
                     userId: entry.userId,
-                    userName: entry.userName,
-                    userPhone: entry.userPhone || '', // Include extracted phone number
+                    userName: entry.userName || 'Unknown',  // ✅ Ensure userName is present
+                    userPhone: entry.userId || '',  // ✅ userPhone should be userId
+                    playerId: entry.playerIdNumber || entry.userId || '',  // ✅ Add playerId
                     diamonds: entry.diamonds,
                     rate: entry.rate || 100,
-                    amount: entry.diamonds * (entry.rate || 100),
+                    amount: Math.round(entry.diamonds * (entry.rate || 100)),  // ✅ Proper calculation
                     status: entry.status,
+                    date: entry.createdAt,  // ✅ Use 'date' not 'createdAt'
+                    processingStartedAt: entry.processingStartedAt || null,
                     createdAt: entry.createdAt,
                     groupId: groupId,
                     source: entry.source || 'normal',
                     messageId: entry.messageId,
                     approvedAt: entry.approvedAt,
-                    deliveryConfirmed: entry.deliveryConfirmed
+                    approvedBy: entry.approvedBy,  // ✅ Add approvedBy
+                    deliveryConfirmed: entry.deliveryConfirmed,
+                    deletedAt: entry.deletedAt,  // ✅ Add deletedAt
+                    deletedBy: entry.deletedBy  // ✅ Add deletedBy
                 });
             }
         }
 
         // Sort by creation time (newest first)
-        allOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        allOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         return allOrders;
     } catch (error) {
@@ -130,18 +139,24 @@ function getOrderById(orderId) {
                     return {
                         id: entry.id,
                         userId: entry.userId,
-                        userName: entry.userName,
+                        userName: entry.userName || 'Unknown',
+                        userPhone: entry.userId || '',
+                        playerId: entry.playerIdNumber || entry.userId || '',
                         diamonds: entry.diamonds,
                         rate: entry.rate || 100,
-                        amount: entry.diamonds * (entry.rate || 100),
+                        amount: Math.round(entry.diamonds * (entry.rate || 100)),
                         status: entry.status,
+                        date: entry.createdAt,
+                        processingStartedAt: entry.processingStartedAt,
                         createdAt: entry.createdAt,
                         groupId: groupId,
                         source: entry.source || 'normal',
                         messageId: entry.messageId,
                         approvedAt: entry.approvedAt,
+                        approvedBy: entry.approvedBy,
                         deliveryConfirmed: entry.deliveryConfirmed,
-                        processingStartedAt: entry.processingStartedAt
+                        deletedAt: entry.deletedAt,
+                        deletedBy: entry.deletedBy
                     };
                 }
             }

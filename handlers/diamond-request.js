@@ -476,7 +476,9 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
             messageId: entry.messageId
         });
 
-        // 🔍 NEW Missing Order System: Check WhatsApp → Database → Admin Panel
+        // 🔍 DISABLED: Missing Order System - Check WhatsApp → Database → Admin Panel
+        // REASON: Causes automatic recovery on every new order, creating duplicates
+        /*
         setImmediate(async () => {
             try {
                 const chat = await msg.getChat();
@@ -485,6 +487,7 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
                 console.error('[MISSING ORDER] ❌ Background check failed:', err);
             }
         });
+        */
 
         // Notify admin panel in real-time - with retry and timeout handling
         try {
@@ -613,7 +616,9 @@ async function handleDiamondRequest(msg, userId, userName, groupId, diamonds, gr
 
         await msg.reply(confirmationMsg);
 
-        // 🔍 NEW Missing Order System: Check WhatsApp → Database → Admin Panel
+        // 🔍 DISABLED: Missing Order System - Check WhatsApp → Database → Admin Panel
+        // REASON: Causes automatic recovery on every new order, creating duplicates
+        /*
         setImmediate(async () => {
             try {
                 const chat = await msg.getChat();
@@ -622,6 +627,7 @@ async function handleDiamondRequest(msg, userId, userName, groupId, diamonds, gr
                 console.error('[MISSING ORDER] ❌ Background check failed:', err);
             }
         });
+        */
 
         // Notify admin panel in real-time - with retry and timeout handling
         try {

@@ -141,9 +141,13 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
                     console.log(`[APPROVAL-RECOVERY]    Match ${i+1}: ID=${o.id}, Diamonds=${o.diamonds}💎, Status=${o.status}, Name=${o.userName}`);
                 });
                 
-                if (userOrders.length > 0) {
+                // ✅ STRICT VALIDATION: Only approve if EXACTLY ONE match found
+                if (userOrders.length === 1) {
                     latestOrder = userOrders[0];
                     console.log(`[APPROVAL-RECOVERY] ✅ SELECTED EXACT MATCH: ${latestOrder.id} (${latestOrder.diamonds}💎, status: ${latestOrder.status}, name: ${latestOrder.userName})`);
+                } else if (userOrders.length > 1) {
+                    console.log(`[APPROVAL-RECOVERY] ❌ MULTIPLE MATCHES FOUND (${userOrders.length}) - Cannot determine which order to approve. Please delete duplicate orders or be more specific.`);
+                    latestOrder = null; // Don't approve any - too ambiguous
                 } else {
                     console.log(`[APPROVAL-RECOVERY] ⚠️ No exact matches found, will try fallback`);
                 }

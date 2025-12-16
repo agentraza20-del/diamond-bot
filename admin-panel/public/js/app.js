@@ -6323,10 +6323,13 @@ setInterval(() => {
     loadStats(); // Real-time stats update (pending orders, badges, etc.)
 }, 1000);
 
-// Auto-refresh full data every 30 seconds (silent)
-setInterval(() => {
-    silentRefreshData(); // Silent refresh without toast
-}, 30000);
+// Auto-refresh full data every 30 seconds (silent) - DISABLED to prevent flickering
+// setInterval(() => {
+//     silentRefreshData(); // Silent refresh without toast
+// }, 30000);
+console.log('[AUTO-REFRESH] ❌ Disabled 30s auto-refresh to prevent table flickering');
+console.log('[AUTO-REFRESH] ✅ Only stats auto-refresh enabled (1s interval)');
+console.log('[AUTO-REFRESH] 💡 Use refresh button to manually update orders');
 
 // Due Reminder Toggle - Toggle mark for due reminder
 function toggleDueReminder(groupId) {

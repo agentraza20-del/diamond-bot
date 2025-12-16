@@ -2430,7 +2430,9 @@ app.post('/api/order-event', async (req, res) => {
             // ✅ Handle auto-approved orders from 2-minute timer
             console.log(`[ORDER-EVENT] 🤖 AUTO-APPROVED ORDER: ${entryToUse.diamonds}💎 from ${entryToUse.userName || entryToUse.userId}`);
             
-            // Broadcast to all admin panel clients
+            // DISABLED: Don't broadcast to prevent frontend flickering
+            // Users can refresh manually to see approved orders
+            /*
             io.emit('orderApproved', {
                 orderId: entryToUse.id || entryToUse.orderId,
                 status: 'approved',
@@ -2439,8 +2441,9 @@ app.post('/api/order-event', async (req, res) => {
                 timestamp: new Date().toISOString(),
                 autoApproved: true
             });
+            */
             
-            console.log(`[ORDER-EVENT] ✅ Auto-approval broadcasted to admin panel`);
+            console.log(`[ORDER-EVENT] ✅ Auto-approval logged (broadcast disabled to prevent UI flickering)`);
             
         } else if (eventTypeToUse === 'missing-order-recovery') {
             // Handle recovered missing orders

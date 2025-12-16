@@ -858,18 +858,19 @@ function initSocketListeners() {
         }
     });
 
-    // 🔄 REAL-TIME ORDER STATUS UPDATE - Direct socket event
+    // 🔄 REAL-TIME ORDER STATUS UPDATE - DISABLED to prevent flickering
     socket.on('orderStatusUpdated', (data) => {
-        console.log(`[REAL-TIME UPDATE] 🔄 Order status changed:`, data);
+        console.log(`[REAL-TIME UPDATE] 🔄 Order status changed (UI update disabled):`, data);
+        // DISABLED: Don't update UI in real-time to prevent table jumping
+        // Users can refresh manually if needed
+        /*
         if (data.orderId && data.status) {
-            // Instantly update the order in memory and UI without full page refresh
             updateOrderStatusRealTime(data.orderId, data.status, data);
-            
-            // Show subtle notification
             if (data.message) {
                 showToast(data.message, 'info');
             }
         }
+        */
     });
 
     socket.on('orderPermanentlyDeleted', (data) => {
@@ -879,26 +880,30 @@ function initSocketListeners() {
         // loadOrdersNew(); // Removed to prevent excessive reloads
     });
 
-    // 📊 NEW ORDER CREATED - Real-time add to table
+    // 📊 NEW ORDER CREATED - DISABLED to prevent flickering
     socket.on('newOrderCreated', (data) => {
-        console.log(`[NEW ORDER] ✨ New order created:`, data);
+        console.log(`[NEW ORDER] ✨ New order created (UI update disabled):`, data);
+        // DISABLED: Don't update UI in real-time to prevent table jumping
+        /*
         if (data.order) {
             addNewOrderToTable(data.order);
             playNotificationSound();
             showToast(`🎯 New order from ${data.order.phone}`, 'success');
-            
-            // 🔔 Update notification badge in real-time
             updateNotificationBadge();
         }
+        */
     });
 
-    // 🗑️ ORDER DELETED - Real-time removal from table
+    // 🗑️ ORDER DELETED - DISABLED to prevent flickering
     socket.on('orderDeleted', (data) => {
-        console.log(`[DELETE ORDER] 🗑️ Order deleted:`, data);
+        console.log(`[DELETE ORDER] 🗑️ Order deleted (UI update disabled):`, data);
+        // DISABLED: Don't update UI in real-time to prevent table jumping
+        /*
         if (data.orderId) {
             removeOrderFromTable(data.orderId);
             showToast(data.message || 'Order deleted', 'warning');
         }
+        */
     });
 
     // ✅ ORDER APPROVED - Real-time status change with highlight

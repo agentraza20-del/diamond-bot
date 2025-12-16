@@ -1199,6 +1199,8 @@ client.on('message', async (msg) => {
             // ❌ Still not found - check if order was already processed
             console.log(`[APPROVAL] ❌ Could not recover missing order`);
             
+            // ⏹️ DISABLED: Group notification for already processed orders
+            // Admin will only see logs, no message in group
             if (quotedMessageId) {
                 const groupData = db.getGroupData(groupId);
                 if (groupData && groupData.entries) {
@@ -1209,22 +1211,27 @@ client.on('message', async (msg) => {
                     );
                     
                     if (processedOrder) {
-                        let statusText = '';
-                        let pAdmin = processedOrder.approvedBy || 'Admin';
+                        // ✅ Just log it, don't send message to group
+                        console.log(`[APPROVAL] ℹ️ Order ${processedOrder.id} already ${processedOrder.status} by ${processedOrder.approvedBy || 'Admin'}`);
+                        console.log(`[APPROVAL] 💎 Diamonds: ${processedOrder.diamonds}💎`);
                         
-                        if (processedOrder.status === 'processing') {
-                            statusText = `⏳ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Processing শুরু হয়েছে*`;
-                        } else if (processedOrder.status === 'approved') {
-                            statusText = `✅ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Approve করা হয়েছে*`;
-                        } else if (processedOrder.status === 'deleted') {
-                            statusText = `🗑️ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Delete করা হয়েছে*`;
-                        } else {
-                            statusText = `ℹ️ *এই অর্ডারটি ইতিমধ্যে প্রসেস করা হয়েছে* (Status: ${processedOrder.status})`;
-                        }
+                        // ⏹️ DISABLED: No reply message sent to group
+                        // let statusText = '';
+                        // let pAdmin = processedOrder.approvedBy || 'Admin';
+                        // 
+                        // if (processedOrder.status === 'processing') {
+                        //     statusText = `⏳ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Processing শুরু হয়েছে*`;
+                        // } else if (processedOrder.status === 'approved') {
+                        //     statusText = `✅ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Approve করা হয়েছে*`;
+                        // } else if (processedOrder.status === 'deleted') {
+                        //     statusText = `🗑️ *এই অর্ডারটি ইতিমধ্যে ${pAdmin} দ্বারা Delete করা হয়েছে*`;
+                        // } else {
+                        //     statusText = `ℹ️ *এই অর্ডারটি ইতিমধ্যে প্রসেস করা হয়েছে* (Status: ${processedOrder.status})`;
+                        // }
+                        // 
+                        // await replyWithDelay(msg, `${statusText}\n\n💎 Diamonds: ${processedOrder.diamonds}💎\n📅 Order ID: ${processedOrder.id}`);
+                        // messageCounter.incrementCounter();
                         
-                        await replyWithDelay(msg, `${statusText}\n\n💎 Diamonds: ${processedOrder.diamonds}💎\n📅 Order ID: ${processedOrder.id}`);
-                        messageCounter.incrementCounter();
-                        console.log(`[APPROVAL] ℹ️ Order ${processedOrder.id} already ${processedOrder.status}`);
                         return;
                     }
                 }

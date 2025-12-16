@@ -343,6 +343,7 @@ function restoreProcessingTimers(client) {
     try {
         const database = db.loadDatabase();
         let restoredCount = 0;
+        let approvedCount = 0;
         
         for (const [groupId, groupData] of Object.entries(database.groups || {})) {
             if (!groupData.entries) continue;
@@ -367,9 +368,30 @@ function restoreProcessingTimers(client) {
                         processingTimers[timerKey] = timer;
                         restoredCount++;
                     } else {
-                        // Timer has expired, auto-approve immediately
-                        console.log(`[AUTO-APPROVAL RESTORE] Auto-approving expired Order ${entry.id}`);
-                        startAutoApprovalTimer(groupId, entry.id, entry, client);
+                        // Timer has expired, auto-approve IMMEDIATELY without starting new timer
+                        console.log(`[AUTO-APPROVAL RESTORE] ⚡ Expired order ${entry.id} - Auto-approving NOW (elapsed: ${(elapsedMs / 1000).toFixed(0)}s)`);
+                        
+                        // Approve directly without delay
+                        (async () => {
+                            try {
+                                // Deduct stock
+                                const stockResult = deductAdminDiamondStock(entry.diamonds);
+                                if (stockResult.success) {
+                                    db.approveEntry(groupId, entry.id, 'System (Auto-Approval - Expired)');
+                                    console.log(`[AUTO-APPROVAL RESTORE] ✅ Order ${entry.id} approved (stock deducted: ${entry.diamonds})`);
+                                    approvedCount++;
+                                } else {
+                                    console.log(`[AUTO-APPROVAL RESTORE] ❌ Cannot approve ${entry.id} - insufficient stock`);
+                                    // Revert to pending
+                                    entry.status = 'pending';
+                                    delete entry.processingStartedAt;
+                                    delete entry.processingTimeout;
+                                    db.saveDatabase(database);
+                                }
+                            } catch (err) {
+                                console.error(`[AUTO-APPROVAL RESTORE] Error approving ${entry.id}:`, err.message);
+                            }
+                        })();
                     }
                 }
             }
@@ -377,6 +399,9 @@ function restoreProcessingTimers(client) {
         
         if (restoredCount > 0) {
             console.log(`[AUTO-APPROVAL] ✅ Restored ${restoredCount} processing timers`);
+        }
+        if (approvedCount > 0) {
+            console.log(`[AUTO-APPROVAL] ✅ Auto-approved ${approvedCount} expired orders`);
         }
     } catch (error) {
         console.error('[AUTO-APPROVAL RESTORE] Error:', error.message);

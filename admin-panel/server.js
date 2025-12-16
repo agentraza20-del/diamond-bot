@@ -899,12 +899,16 @@ app.post('/api/groups/:groupId/clear', async (req, res) => {
 
 // Bulk Clear Group Data
 app.post('/api/groups/bulk-clear', async (req, res) => {
+    console.log('[BULK-CLEAR] Request received:', req.body);
     try {
         const { groupIds } = req.body;
 
         if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
+            console.log('[BULK-CLEAR] Invalid groupIds:', groupIds);
             return res.status(400).json({ error: 'Invalid groupIds' });
         }
+
+        console.log('[BULK-CLEAR] Clearing', groupIds.length, 'groups');
 
         // Read all database files
         const database = await readJSON(databasePath);

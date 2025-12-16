@@ -2328,13 +2328,18 @@ async function bulkClearData() {
     }
 
     try {
+        console.log('[BULK-CLEAR] Sending request for', selectedGroups.size, 'groups:', Array.from(selectedGroups));
+        
         const response = await fetch('/api/groups/bulk-clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ groupIds: Array.from(selectedGroups) })
         });
 
+        console.log('[BULK-CLEAR] Response status:', response.status);
+        
         const result = await response.json();
+        console.log('[BULK-CLEAR] Response data:', result);
         
         if (result.success) {
             showToast(`${result.count} groups cleared successfully`, 'success');
@@ -2342,11 +2347,12 @@ async function bulkClearData() {
             updateSelectionCount();
             await silentRefreshData();
         } else {
-            showToast('Failed to clear groups', 'error');
+            console.error('[BULK-CLEAR] Failed:', result);
+            showToast('Failed to clear groups: ' + (result.error || 'Unknown error'), 'error');
         }
     } catch (error) {
-        console.error('Error clearing groups:', error);
-        showToast('Error clearing groups', 'error');
+        console.error('[BULK-CLEAR] Error:', error);
+        showToast('Error clearing groups: ' + error.message, 'error');
     }
 }
 

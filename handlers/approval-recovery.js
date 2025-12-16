@@ -86,32 +86,53 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
                 }
             }
             
-            // STEP 1: Try to find EXACT matching order by diamonds
+            // STEP 1: Try to find EXACT matching order by messageId first, then diamonds
             if (extractedDiamonds && groupData && groupData.entries) {
                 console.log(`[APPROVAL-RECOVERY] 🔍 STEP 1: Looking for EXACT match with ${extractedDiamonds}💎`);
                 console.log(`[APPROVAL-RECOVERY]    Total entries in database: ${groupData.entries.length}`);
                 console.log(`[APPROVAL-RECOVERY]    User ID to match: ${quotedUserId}`);
+                console.log(`[APPROVAL-RECOVERY]    Quoted Message ID: ${quotedMsg.id._serialized}`);
                 
-                // Get user's pending/processing orders for EXACT diamond amount
-                const userOrders = groupData.entries
+                // PRIORITY 1: Try exact messageId match first (most accurate)
+                let userOrders = groupData.entries
                     .filter(e => {
-                        const isUserMatch = e.userId === quotedUserId;
+                        const isMessageMatch = e.messageId === quotedMsg.id._serialized;
                         const isStatusMatch = e.status === 'pending' || e.status === 'processing';
-                        const isDiamondMatch = e.diamonds === extractedDiamonds;
                         
-                        if (!isUserMatch) {
-                            console.log(`[APPROVAL-RECOVERY]    ❌ Order ID=${e.id}: User=${e.userId} (need ${quotedUserId})`);
-                        } else if (!isStatusMatch) {
-                            console.log(`[APPROVAL-RECOVERY]    ❌ Order ID=${e.id}: Status=${e.status} (need pending/processing)`);
-                        } else if (!isDiamondMatch) {
-                            console.log(`[APPROVAL-RECOVERY]    ❌ Order ID=${e.id}: Diamonds=${e.diamonds}💎 (need ${extractedDiamonds}💎)`);
-                        } else {
-                            console.log(`[APPROVAL-RECOVERY]    ✅ Order ID=${e.id}: MATCH! User=${e.userId}, Status=${e.status}, Diamonds=${e.diamonds}💎`);
+                        if (isMessageMatch && isStatusMatch) {
+                            console.log(`[APPROVAL-RECOVERY]    ✅ PERFECT MATCH by MessageId! Order ID=${e.id}, Diamonds=${e.diamonds}💎`);
+                            return true;
                         }
+                        return false;
+                    });
+                
+                // PRIORITY 2: If no messageId match, fallback to user + diamonds + status
+                if (userOrders.length === 0) {
+                    console.log(`[APPROVAL-RECOVERY]    ⚠️ No messageId match found, trying user+diamonds+status match...`);
+                    
+                    // Get user's pending/processing orders for EXACT diamond amount
+                    userOrders = groupData.entries
+                        .filter(e => {
+                            const isUserMatch = e.userId === quotedUserId;
+                            const isStatusMatch = e.status === 'pending' || e.status === 'processing';
+                            const isDiamondMatch = e.diamonds === extractedDiamonds;
                         
-                        return isUserMatch && isStatusMatch && isDiamondMatch;
-                    })
-                    .sort((a, b) => b.id - a.id);  // Most recent first
+                            if (!isUserMatch) {
+                                console.log(`[APPROVAL-RECOVERY]    ❌ Order ID=${e.id}: User=${e.userId} (need ${quotedUserId})`);
+                            } else if (!isStatusMatch) {
+                                console.log(`[APPROVAL-RECOVERY]    ❌ Order ID=${e.id}: Status=${e.status} (need pending/processing)`);
+                            } else if (!isDiamondMatch) {
+                                console.log(`[APPROVAL-RECOVERY]    ❌ Order ID=${e.id}: Diamonds=${e.diamonds}💎 (need ${extractedDiamonds}💎)`);
+                            } else {
+                                console.log(`[APPROVAL-RECOVERY]    ✅ Order ID=${e.id}: MATCH! User=${e.userId}, Status=${e.status}, Diamonds=${e.diamonds}💎`);
+                            }
+                            
+                            return isUserMatch && isStatusMatch && isDiamondMatch;
+                        })
+                        .sort((a, b) => b.id - a.id);  // Most recent first
+                } else {
+                    console.log(`[APPROVAL-RECOVERY]    ✅ Found exact messageId match!`);
+                }
                 
                 console.log(`[APPROVAL-RECOVERY]    Result: Found ${userOrders.length} exact matches`);
                 

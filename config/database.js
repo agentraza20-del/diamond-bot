@@ -228,7 +228,7 @@ function addEntry(groupId, userId, diamonds, rate, groupName, messageId, userNam
 // Change entry status to 'processing' when admin approves (sends "done")
 function setEntryProcessing(groupId, entryId, approvedBy = null) {
     const db = loadDatabase();
-    if (!db.groups[groupId]) return false;
+    if (!db.groups[groupId] || !db.groups[groupId].entries) return false;
     
     const entry = db.groups[groupId].entries.find(e => e.id === entryId);
     if (entry) {
@@ -246,7 +246,7 @@ function setEntryProcessing(groupId, entryId, approvedBy = null) {
 
 function approveEntry(groupId, entryId, approvedBy = null) {
     const db = loadDatabase();
-    if (!db.groups[groupId]) return false;
+    if (!db.groups[groupId] || !db.groups[groupId].entries) return false;
     
     const entry = db.groups[groupId].entries.find(e => e.id === entryId);
     if (entry) {

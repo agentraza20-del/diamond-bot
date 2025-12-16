@@ -906,9 +906,12 @@ function initSocketListeners() {
         */
     });
 
-    // ✅ ORDER APPROVED - Real-time status change with highlight
+    // ✅ ORDER APPROVED - DISABLED to prevent flickering
     socket.on('orderApproved', (data) => {
-        console.log(`[APPROVE ORDER] ✅ Order approved:`, data);
+        console.log(`[APPROVE ORDER] ✅ Order approved (UI update disabled):`, data);
+        // DISABLED: Don't update UI in real-time to prevent table jumping/flickering
+        // The countdown timer will show "Approving..." then user can refresh manually
+        /*
         if (data.orderId) {
             updateOrderStatusRealTime(data.orderId, 'approved', data);
             highlightOrderRow(data.orderId, 'success');
@@ -917,12 +920,15 @@ function initSocketListeners() {
             // 🔔 Update notification badge when order is approved
             updateNotificationBadge();
         }
+        */
     });
     
-    // ✅ NEW: Missing Orders Recovered Event
+    // ✅ NEW: Missing Orders Recovered Event - DISABLED to prevent flickering
     socket.on('missingOrdersRecovered', (data) => {
-        console.log(`[MISSING ORDERS RECOVERED] ✨ Recovered ${data.recoveredCount} orders:`, data);
-        
+        console.log(`[MISSING ORDERS RECOVERED] ✨ Recovered ${data.recoveredCount} orders (UI update disabled):`, data);
+        // DISABLED: Don't reload orders automatically to prevent flickering
+        // User can refresh manually if needed
+        /*
         if (data.recoveredCount > 0) {
             showNotification(`✨ ${data.recoveredCount} missing order(s) recovered!`, 'success');
             
@@ -933,6 +939,7 @@ function initSocketListeners() {
             // Reload orders to show the recovered ones
             loadOrdersNew();
         }
+        */
     });
 }
 

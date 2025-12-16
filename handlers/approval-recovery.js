@@ -330,7 +330,7 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
             
             // ✅ Check if this order exists in admin panel
             try {
-                const checkResponse = await fetch('http://localhost:3005/api/check-order', {
+                const checkResponse = await fetch('http://localhost:3000/api/check-order', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -368,7 +368,7 @@ async function handleAdminApprovalRecovery(msg, groupId, fromUserId, adminName) 
                     const processingStartedAt = new Date().toISOString();
                     
                     // Send recovery request to admin panel with PROCESSING status
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://localhost:3000/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

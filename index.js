@@ -1501,7 +1501,7 @@ client.on('message', async (msg) => {
                                 const controller = new AbortController();
                                 const timeoutId = setTimeout(() => controller.abort(), 3000);
                                 
-                                await fetch('http://localhost:3005/api/order-event', {
+                                await fetch('http://localhost:3000/api/order-event', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
@@ -1910,7 +1910,7 @@ client.on('message_revoke', async (after, before) => {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 3000);
                     
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://localhost:3000/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1997,7 +1997,7 @@ client.on('message_revoke', async (after, before) => {
                 // Use async IIFE to send without blocking
                 (async () => {
                     try {
-                        const response = await fetch('http://localhost:3005/api/order-event', {
+                        const response = await fetch('http://localhost:3000/api/order-event', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({

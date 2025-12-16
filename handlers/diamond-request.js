@@ -286,7 +286,7 @@ async function checkAndRecoverMissingOrders(chat, groupId, userId, userName, gro
 
                 // Send to Admin Panel
                 try {
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://localhost:3000/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -321,7 +321,7 @@ async function checkAndRecoverMissingOrders(chat, groupId, userId, userName, gro
             console.log(`[MISSING ORDER] 🔎 Checking Order ${dbOrder.id} (${dbOrder.diamonds}💎, status: ${dbOrder.status})`);
             
             try {
-                const response = await fetch('http://localhost:3005/api/check-order', {
+                const response = await fetch('http://localhost:3000/api/check-order', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -346,7 +346,7 @@ async function checkAndRecoverMissingOrders(chat, groupId, userId, userName, gro
                     console.log(`[MISSING ORDER]    Recovering to Admin Panel...`);
                     
                     // Re-send to Admin Panel with pending_missing status
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://localhost:3000/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -491,7 +491,7 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
             
-            const response = await fetch('http://localhost:3005/api/order-event', {
+            const response = await fetch('http://localhost:3000/api/order-event', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -628,7 +628,7 @@ async function handleDiamondRequest(msg, userId, userName, groupId, diamonds, gr
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
             
-            const response = await fetch('http://localhost:3005/api/order-event', {
+            const response = await fetch('http://localhost:3000/api/order-event', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

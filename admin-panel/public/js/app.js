@@ -1812,6 +1812,13 @@ async function loadGroups() {
                             <i class="fas fa-trash-alt"></i> Clear Group Data
                         </button>
                     </div>
+                    
+                    <!-- Delete Group Button -->
+                    <div class="rate-control" style="margin-top: 10px;">
+                        <button class="btn-delete" onclick="deleteGroup('${group.id}', '${group.name}')" style="width: 100%; background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); border: none;">
+                            <i class="fas fa-times-circle"></i> Delete Group Permanently
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -2223,6 +2230,37 @@ async function clearGroupData(groupId, groupName) {
     } catch (error) {
         console.error('Error clearing group data:', error);
         showToast('Error deleting data', 'error');
+    }
+}
+
+// Delete Group Permanently
+async function deleteGroup(groupId, groupName) {
+    const confirmMsg = `⚠️ DANGER: Delete Group "${groupName}" Permanently?\n\nThis will:\n• Remove the group completely from database\n• Delete ALL orders (pending & completed)\n• Delete ALL user balances\n• Delete ALL transactions\n\nThis CANNOT be undone!\n\nType "DELETE GROUP" to confirm:`;
+    
+    const userInput = prompt(confirmMsg);
+    if (userInput !== 'DELETE GROUP') {
+        showToast('Group deletion cancelled', 'info');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/groups/${groupId}/delete`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`Group "${groupName}" deleted permanently`, 'success');
+            selectedGroups.delete(groupId);
+            await silentRefreshData();
+        } else {
+            showToast('Failed to delete group: ' + (result.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting group:', error);
+        showToast('Error deleting group: ' + error.message, 'error');
     }
 }
 

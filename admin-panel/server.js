@@ -905,6 +905,57 @@ app.post('/api/groups/:groupId/clear', async (req, res) => {
     }
 });
 
+// Delete Group Permanently
+app.delete('/api/groups/:groupId/delete', async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        console.log('[DELETE-GROUP] Deleting group:', groupId);
+
+        // Read all database files
+        const database = await readJSON(databasePath);
+        const users = await readJSON(usersPath);
+        const transactions = await readJSON(transactionsPath);
+
+        // Check if group exists
+        if (!database.groups || !database.groups[groupId]) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+
+        const groupName = database.groups[groupId].name || groupId;
+
+        // Delete the entire group from database
+        delete database.groups[groupId];
+
+        // Delete user balances for this group
+        Object.keys(users).forEach(phone => {
+            if (users[phone].groups && users[phone].groups[groupId]) {
+                delete users[phone].groups[groupId];
+            }
+        });
+
+        // Delete all transactions for this group
+        const filteredTransactions = transactions.filter(tx => tx && tx.groupId !== groupId);
+
+        // Save all changes
+        await writeJSON(databasePath, database);
+        await writeJSON(usersPath, users);
+        await writeJSON(transactionsPath, filteredTransactions);
+
+        console.log('[DELETE-GROUP] ✅ Group deleted successfully:', groupName);
+        io.emit('groupDeleted', { groupId, groupName });
+
+        res.json({ 
+            success: true, 
+            groupId, 
+            groupName,
+            message: `Group "${groupName}" deleted permanently` 
+        });
+    } catch (error) {
+        console.error('[DELETE-GROUP] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Bulk Clear Group Data
 app.post('/api/groups/bulk-clear', async (req, res) => {
     console.log('[BULK-CLEAR] Request received:', req.body);

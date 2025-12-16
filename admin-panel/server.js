@@ -3462,16 +3462,24 @@ const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
 
 let updateTimeout = null;
 watcher.on('change', (path) => {
+    // ❌ DISABLED: File watcher causes constant flickering
     // Debounce file change events - wait 2 seconds before emitting
-    if (updateTimeout) {
-        clearTimeout(updateTimeout);
-    }
+    // if (updateTimeout) {
+    //     clearTimeout(updateTimeout);
+    // }
     
-    updateTimeout = setTimeout(() => {
-        console.log(`File ${path} changed, emitting update...`);
-        io.emit('dataUpdated', { timestamp: Date.now() });
-        updateTimeout = null;
-    }, 2000); // Increased to 2 seconds to prevent rapid updates
+    // updateTimeout = setTimeout(() => {
+    //     console.log(`File ${path} changed, emitting update...`);
+    //     io.emit('dataUpdated', { timestamp: Date.now() });
+    //     updateTimeout = null;
+    // }, 2000); // Increased to 2 seconds to prevent rapid updates
+    
+    // Note: Updates now handled via specific socket events:
+    // - orderStatusUpdated
+    // - newOrderCreated
+    // - orderDeleted
+    // - missingOrderRecovered
+    console.log(`File ${path} changed (dataUpdated event disabled to prevent flickering)`);
 });
 
 // Send message to group endpoint

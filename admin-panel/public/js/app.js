@@ -2893,20 +2893,21 @@ let pendingRefresh = false;
 function startOrdersPolling() {
     if (ordersPollingInterval) return; // Already polling
     
-    console.log('[ORDERS POLLING] Started - updating every 3 seconds (Optimized)');
+    console.log('[ORDERS POLLING] ❌ DISABLED - Polling turned off to prevent flickering. Updates via socket events only.');
     isOrdersViewActive = true;
     
     // Initial load
     loadOrdersNew();
     
+    // ❌ DISABLED: Polling causes flickering even with silent refresh
     // Refresh every 3 seconds while Orders view is active (reduced from 1 second)
-    ordersPollingInterval = setInterval(() => {
-        if (isOrdersViewActive && !isRefreshing) {
-            silentRefreshOrders();
-        } else if (isOrdersViewActive && isRefreshing) {
-            pendingRefresh = true;
-        }
-    }, 3000); // Changed from 1000 to 3000 (3 seconds)
+    // ordersPollingInterval = setInterval(() => {
+    //     if (isOrdersViewActive && !isRefreshing) {
+    //         silentRefreshOrders();
+    //     } else if (isOrdersViewActive && isRefreshing) {
+    //         pendingRefresh = true;
+    //     }
+    // }, 3000); // Changed from 1000 to 3000 (3 seconds)
 }
 
 function stopOrdersPolling() {

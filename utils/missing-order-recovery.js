@@ -19,17 +19,82 @@ async function recoveryMissingOrderWithUserData(groupId, quotedUserId, quotedBod
         console.log(`[MISSING-RECOVERY] User: ${quotedUserId}, Group: ${groupId}`);
         
         const groupData = db.getGroupData(groupId);
-        if (!groupData || !groupData.entries) {
-            console.log(`[MISSING-RECOVERY] ❌ Group not found`);
+        
+        // ✅ NEW: If group has no orders, try to extract from quoted message
+        if (!groupData || !groupData.entries || groupData.entries.length === 0) {
+            console.log(`[MISSING-RECOVERY] ⚠️ Group has no orders in bot database`);
+            console.log(`[MISSING-RECOVERY] 🔍 Trying to extract order from quoted message...`);
+            
+            // Extract diamonds from quoted message
+            const lines = quotedBody.split('\n').map(l => l.trim()).filter(l => l);
+            let extractedDiamonds = null;
+            let extractedPlayerId = null;
+            
+            if (lines.length >= 2) {
+                // Multi-line: player ID on line 1, diamonds on line 2
+                const playerIdMatch = lines[0].match(/(\d+)/);
+                extractedPlayerId = playerIdMatch ? playerIdMatch[1] : null;
+                
+                const diamondMatch = lines[1].match(/(\d+)/);
+                extractedDiamonds = diamondMatch ? parseInt(diamondMatch[1]) : null;
+                
+                console.log(`[MISSING-RECOVERY] Multi-line detected: Player=${extractedPlayerId}, Diamonds=${extractedDiamonds}💎`);
+            } else if (lines.length === 1) {
+                // Single line: just diamonds
+                const diamondMatch = lines[0].match(/(\d+)/);
+                extractedDiamonds = diamondMatch ? parseInt(diamondMatch[1]) : null;
+                console.log(`[MISSING-RECOVERY] Single-line detected: Diamonds=${extractedDiamonds}💎`);
+            }
+            
+            if (!extractedDiamonds) {
+                console.log(`[MISSING-RECOVERY] ❌ Could not extract diamonds from quoted message`);
+                return null;
+            }
+            
+            // ✅ Check admin panel for this order
+            console.log(`[MISSING-RECOVERY] 📡 Checking admin panel for order with ${extractedDiamonds}💎...`);
+            
+            try {
+                const fetch = require('node-fetch');
+                const checkResponse = await fetch('http://localhost:3005/api/check-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        groupId: groupId,
+                        userId: quotedUserId,
+                        diamonds: extractedDiamonds
+                    }),
+                    signal: AbortSignal.timeout(3000)
+                });
+                
+                if (checkResponse.ok) {
+                    const checkResult = await checkResponse.json();
+                    
+                    if (checkResult.exists && checkResult.order) {
+                        console.log(`[MISSING-RECOVERY] ✅ Found order in admin panel: ${checkResult.order.id}`);
+                        console.log(`[MISSING-RECOVERY]    Status: ${checkResult.order.status}`);
+                        console.log(`[MISSING-RECOVERY]    Diamonds: ${checkResult.order.diamonds}💎`);
+                        
+                        // Return the order from admin panel
+                        return checkResult.order;
+                    } else {
+                        console.log(`[MISSING-RECOVERY] ❌ Order not found in admin panel`);
+                        return null;
+                    }
+                }
+            } catch (apiError) {
+                console.log(`[MISSING-RECOVERY] ⚠️ Admin panel check failed:`, apiError.message);
+            }
+            
             return null;
         }
         
         // Look for ANY entry from this user (even if not pending)
         const userOrders = groupData.entries.filter(e => e.userId === quotedUserId);
-        console.log(`[MISSING-RECOVERY] Found ${userOrders.length} order(s) for user`);
+        console.log(`[MISSING-RECOVERY] Found ${userOrders.length} order(s) for user in bot database`);
         
         if (userOrders.length === 0) {
-            console.log(`[MISSING-RECOVERY] ❌ No orders found for user`);
+            console.log(`[MISSING-RECOVERY] ❌ No orders found for user in bot database`);
             return null;
         }
         

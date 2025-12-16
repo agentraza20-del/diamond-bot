@@ -267,7 +267,7 @@ function startAutoApprovalTimer(groupId, orderId, entry, client) {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 3000);
                     
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://127.0.0.1:3005/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

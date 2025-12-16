@@ -56,7 +56,7 @@ async function recoveryMissingOrderWithUserData(groupId, quotedUserId, quotedBod
             
             try {
                 const fetch = require('node-fetch');
-                const checkResponse = await fetch('http://localhost:3005/api/check-order', {
+                const checkResponse = await fetch('http://127.0.0.1:3005/api/check-order', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

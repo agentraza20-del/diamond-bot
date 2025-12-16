@@ -857,7 +857,7 @@ client.on('message', async (msg) => {
             // Notify admin panel about cancellation
             if (cancelResult.success) {
                 try {
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://127.0.0.1:3005/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1501,7 +1501,7 @@ client.on('message', async (msg) => {
                                 const controller = new AbortController();
                                 const timeoutId = setTimeout(() => controller.abort(), 3000);
                                 
-                                await fetch('http://localhost:3005/api/order-event', {
+                                await fetch('http://127.0.0.1:3005/api/order-event', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
@@ -1608,7 +1608,7 @@ client.on('message', async (msg) => {
                     
                     // Notify admin panel about manual payment
                     try {
-                        await fetch('http://localhost:3005/api/payment-event', {
+                        await fetch('http://127.0.0.1:3005/api/payment-event', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1910,7 +1910,7 @@ client.on('message_revoke', async (after, before) => {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 3000);
                     
-                    await fetch('http://localhost:3005/api/order-event', {
+                    await fetch('http://127.0.0.1:3005/api/order-event', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1997,7 +1997,7 @@ client.on('message_revoke', async (after, before) => {
                 // Use async IIFE to send without blocking
                 (async () => {
                     try {
-                        const response = await fetch('http://localhost:3005/api/order-event', {
+                        const response = await fetch('http://127.0.0.1:3005/api/order-event', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -2099,7 +2099,7 @@ client.on('message_edit', async (msg, newBody, prevBody) => {
                 `📝 নতুন করে সঠিক তথ্য দিয়ে অর্ডার করুন।`;
             
             try {
-                const statusResponse = await fetch('http://localhost:3005/api/diamond-status');
+                const statusResponse = await fetch('http://127.0.0.1:3005/api/diamond-status');
                 const status = await statusResponse.json();
                 if (status.editMessage && status.editMessage.trim()) {
                     userMessage = status.editMessage;
@@ -2118,7 +2118,7 @@ client.on('message_edit', async (msg, newBody, prevBody) => {
             
             // Notify admin panel
             try {
-                await fetch('http://localhost:3005/api/order-event', {
+                await fetch('http://127.0.0.1:3005/api/order-event', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2178,7 +2178,7 @@ async function startDeletedMessageChecker(client) {
                                 
                                 // Notify admin
                                 try {
-                                    await fetch('http://localhost:3005/api/order-event', {
+                                    await fetch('http://127.0.0.1:3005/api/order-event', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({

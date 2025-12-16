@@ -2414,6 +2414,22 @@ app.post('/api/order-event', async (req, res) => {
                 message: message || `New order: ${entryToUse.diamonds}💎 from ${entryToUse.userName}`,
                 timestamp: new Date().toISOString()
             });
+        } else if (eventTypeToUse === 'order-auto-approved') {
+            // ✅ Handle auto-approved orders from 2-minute timer
+            console.log(`[ORDER-EVENT] 🤖 AUTO-APPROVED ORDER: ${entryToUse.diamonds}💎 from ${entryToUse.userName || entryToUse.userId}`);
+            
+            // Broadcast to all admin panel clients
+            io.emit('orderApproved', {
+                orderId: entryToUse.id || entryToUse.orderId,
+                status: 'approved',
+                order: entryToUse,
+                message: message || `🤖 Order auto-approved: ${entryToUse.diamonds}💎`,
+                timestamp: new Date().toISOString(),
+                autoApproved: true
+            });
+            
+            console.log(`[ORDER-EVENT] ✅ Auto-approval broadcasted to admin panel`);
+            
         } else if (eventTypeToUse === 'missing-order-recovery') {
             // Handle recovered missing orders
             console.log(`[ORDER-EVENT] 🚨 MISSING ORDER RECOVERED: ${entryToUse.diamonds}💎 from ${entryToUse.userName}`);

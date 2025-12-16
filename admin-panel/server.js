@@ -145,6 +145,14 @@ initializeFiles().catch(err => console.error('[INIT] Error:', err));
 // Middleware
 app.use(express.json());
 
+// Debug middleware for bulk-clear
+app.use('/api/groups/bulk-clear', (req, res, next) => {
+    console.log('[BULK-CLEAR-DEBUG] Headers:', req.headers);
+    console.log('[BULK-CLEAR-DEBUG] Body:', req.body);
+    console.log('[BULK-CLEAR-DEBUG] Raw body type:', typeof req.body);
+    next();
+});
+
 // Authentication middleware
 function requireAuth(req, res, next) {
     let token = req.headers['authorization'];

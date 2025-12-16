@@ -2328,12 +2328,14 @@ async function bulkClearData() {
     }
 
     try {
-        console.log('[BULK-CLEAR] Sending request for', selectedGroups.size, 'groups:', Array.from(selectedGroups));
+        const requestBody = { groupIds: Array.from(selectedGroups) };
+        console.log('[BULK-CLEAR] Sending request for', selectedGroups.size, 'groups:', requestBody);
+        console.log('[BULK-CLEAR] JSON body:', JSON.stringify(requestBody));
         
         const response = await fetch('/api/groups/bulk-clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupIds: Array.from(selectedGroups) })
+            body: JSON.stringify(requestBody)
         });
 
         console.log('[BULK-CLEAR] Response status:', response.status);
